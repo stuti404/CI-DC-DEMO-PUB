@@ -9,25 +9,29 @@ bundle:
 include:
   - PFL/resources/*.yml
 
+# workspace.host is intentionally omitted below - the Databricks CLI does not
+# support ${VAR} interpolation for authentication fields. Each target's host
+# is supplied via the DATABRICKS_HOST environment variable at deploy time
+# (buildspec-publish.yml / buildspec-execute.yml export it per branch from
+# DATABRICKS_HOST_DEV / _UAT / _PROD before invoking `databricks bundle`).
+#
+# run_as/service_principal_name is also omitted for the same reason as the
+# personal-token dummy setup: no admin-created service principal exists yet
+# (Doc Sec 5.1). Deploys run as the logged-in user instead, under their own
+# writable path rather than /Workspace/PFL/.
 targets:
   dev:
     mode: development
     default: true
     workspace:
-      host: ${DATABRICKS_HOST_DEV}
-    run_as:
-      service_principal_name: ${DATABRICKS_SP_CLIENT_ID}
+      root_path: /Users/stuti@ganitinc.com/.bundle/${bundle.name}/${bundle.target}
 
   uat:
     mode: production
     workspace:
-      host: ${DATABRICKS_HOST_UAT}
-    run_as:
-      service_principal_name: ${DATABRICKS_SP_CLIENT_ID}
+      root_path: /Users/stuti@ganitinc.com/.bundle/${bundle.name}/${bundle.target}
 
   prod:
     mode: production
     workspace:
-      host: ${DATABRICKS_HOST_PROD}
-    run_as:
-      service_principal_name: ${DATABRICKS_SP_CLIENT_ID}
+      root_path: /Users/stuti@ganitinc.com/.bundle/${bundle.name}/${bundle.target}
