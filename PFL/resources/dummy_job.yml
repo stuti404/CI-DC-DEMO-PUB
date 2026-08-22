@@ -1,0 +1,17 @@
+# Dummy job resource - bundled + deployed by `databricks bundle deploy`.
+# Exists purely so buildspec-publish.yml has something real to deploy.
+
+resources:
+  jobs:
+    dummy_cicd_smoke_test:
+      name: "[${bundle.target}] dummy-cicd-smoke-test"
+      tasks:
+        - task_key: run_smoke_test
+          notebook_task:
+            notebook_path: ../notebooks/dummy_smoke_test_hotfix.py
+            base_parameters:
+              environment: ${bundle.target}
+          new_cluster:
+            spark_version: "14.3.x-scala2.12"
+            node_type_id: "Standard_DS3_v2"
+            num_workers: 0
