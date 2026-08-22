@@ -1,0 +1,25 @@
+name: Enforce UAT Source Branch
+
+# Doc Sec 2.1: uat must only receive PRs from dev. GitHub branch protection
+# has no native "restrict PR source branch" setting, so this check exists to
+# enforce it - add "Enforce UAT Source Branch / check-source-branch" as a
+# required status check on the uat branch protection rule.
+
+on:
+  pull_request:
+    branches: [uat]
+    types: [opened, synchronize, reopened, edited]
+
+jobs:
+  check-source-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify PR source is dev
+        run: |
+          HEAD_REF="${{ github.event.pull_request.head.ref }}"
+          if [ "$HEAD_REF" != "dev" ]; then
+            echo "PRs into uat must come from dev (Doc Sec 2.1)."
+            echo "This PR's source branch is '$HEAD_REF'."
+            exit 1
+          fi
+          echo "OK: PR source branch is dev."
