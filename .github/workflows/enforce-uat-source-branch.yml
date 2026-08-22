@@ -1,8 +1,11 @@
 name: Enforce UAT Source Branch
 
-# Doc Sec 2.1: uat must only receive PRs from dev. GitHub branch protection
-# has no native "restrict PR source branch" setting, so this check exists to
-# enforce it - add "Enforce UAT Source Branch / check-source-branch" as a
+# Doc Sec 2.1: uat must only receive PRs from dev.
+# Doc Sec 10.1: hotfixes must ALSO back-merge directly into uat, bypassing
+# the normal dev -> uat chain. These two rules conflict on their own, so
+# this check allows either: the source branch is exactly "dev", or it is a
+# hotfix/back-merge branch (starts with "hotfix"). Anything else is
+# rejected. Add "Enforce UAT Source Branch / check-source-branch" as a
 # required status check on the uat branch protection rule.
 
 on:
@@ -14,12 +17,19 @@ jobs:
   check-source-branch:
     runs-on: ubuntu-latest
     steps:
-      - name: Verify PR source is dev
+      - name: Verify PR source is dev or a hotfix back-merge
         run: |
           HEAD_REF="${{ github.event.pull_request.head.ref }}"
-          if [ "$HEAD_REF" != "dev" ]; then
-            echo "PRs into uat must come from dev (Doc Sec 2.1)."
-            echo "This PR's source branch is '$HEAD_REF'."
-            exit 1
+          if [ "$HEAD_REF" = "dev" ]; then
+            echo "OK: PR source branch is dev."
+            exit 0
           fi
-          echo "OK: PR source branch is dev."
+          case "$HEAD_REF" in
+            hotfix*)
+              echo "OK: PR source branch '$HEAD_REF' is a hotfix back-merge (Doc Sec 10.1)."
+              exit 0
+              ;;
+          esac
+          echo "PRs into uat must come from dev, or be a hotfix back-merge (Doc Sec 2.1 / 10.1)."
+          echo "This PR's source branch is '$HEAD_REF'."
+          exit 1
