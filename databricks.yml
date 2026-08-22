@@ -4,6 +4,7 @@
 
 bundle:
   name: databricks-test-cicd
+  description: "Dummy bundle used to smoke-test the AzDO -> GitHub/CodeBuild migration"
 
 include:
   - PFL/resources/*.yml
