@@ -1,0 +1,32 @@
+# Dummy bundle config - mirrors Doc Sec 3/1 conventions.
+# Purpose: prove the CI/CD pipeline (validate -> publish -> execute) end to end.
+# Do NOT point this at a real production catalogue/workspace.
+
+bundle:
+  name: databricks-test-cicd
+
+include:
+  - PFL/resources/*.yml
+
+targets:
+  dev:
+    mode: development
+    default: true
+    workspace:
+      host: ${DATABRICKS_HOST_DEV}
+    run_as:
+      service_principal_name: ${DATABRICKS_SP_CLIENT_ID}
+
+  uat:
+    mode: production
+    workspace:
+      host: ${DATABRICKS_HOST_UAT}
+    run_as:
+      service_principal_name: ${DATABRICKS_SP_CLIENT_ID}
+
+  prod:
+    mode: production
+    workspace:
+      host: ${DATABRICKS_HOST_PROD}
+    run_as:
+      service_principal_name: ${DATABRICKS_SP_CLIENT_ID}
