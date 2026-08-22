@@ -4,30 +4,30 @@
 
 bundle:
   name: databricks-test-cicd
-  description: "Dummy bundle used to smoke-test the AzDO -> GitHub/CodeBuild migration"
 
 include:
   - PFL/resources/*.yml
 
+# workspace.host is intentionally omitted below - the Databricks CLI does not
+# support ${VAR} interpolation for authentication fields. Each target's host
+# is supplied via the DATABRICKS_HOST environment variable at deploy time
+# (buildspec-publish.yml / buildspec-execute.yml export it per branch from
+# DATABRICKS_HOST_DEV / _UAT / _PROD before invoking `databricks bundle`).
 targets:
   dev:
     mode: development
     default: true
     workspace:
-      host: ${DATABRICKS_HOST_DEV}
-    run_as:
-      service_principal_name: ${DATABRICKS_SP_CLIENT_ID}
+      # Personal-token dummy workspace has no admin-created service principal yet -
+      # deploy under the logged-in user's own writable path instead of /Workspace/PFL/.
+      root_path: /Users/stuti@ganitinc.com/.bundle/${bundle.name}/${bundle.target}
 
   uat:
     mode: production
-    workspace:
-      host: ${DATABRICKS_HOST_UAT}
     run_as:
       service_principal_name: ${DATABRICKS_SP_CLIENT_ID}
 
   prod:
     mode: production
-    workspace:
-      host: ${DATABRICKS_HOST_PROD}
     run_as:
       service_principal_name: ${DATABRICKS_SP_CLIENT_ID}
