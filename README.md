@@ -1,20 +1,9 @@
-# Introduction 
-TODO: Give a short introduction of your project. Let this section explain the objectives or the motivation behind this project. 
+# PFL-CiCD demo
 
-# Getting Started
-TODO: Guide users through getting your code up and running on their own system. In this section you can talk about:
-1.	Installation process
-2.	Software dependencies
-3.	Latest releases
-4.	API references
+Dummy repo for validating the Azure DevOps -> GitHub + AWS CodeBuild/CodePipeline
+migration end to end (branches, approval gates, buildspecs) before pointing
+real Databricks pipeline repos at the new CI/CD stack.
 
-# Build and Test
-TODO: Describe and show how to build your code and run the tests. 
-
-# Contribute
-TODO: Explain how other users and developers can contribute to make your code better. 
-
-If you want to learn more about creating good readme files then refer the following [guidelines](https://docs.microsoft.com/en-us/azure/devops/repos/git/create-a-readme?view=azure-devops). You can also seek inspiration from the below readme files:
-- [ASP.NET Core](https://github.com/aspnet/Home)
-- [Visual Studio Code](https://github.com/Microsoft/vscode)
-- [Chakra Core](https://github.com/Microsoft/ChakraCore)
+See `PFL/` for the bundle-deployed dummy notebook/job and `PFL_EXECUTE/` for
+the dummy execute artefact. No real catalogue data is touched by anything
+in this repo.
