@@ -16,4 +16,7 @@ print("[dummy_smoke_test_dev] No manual approval expected before this ran.")
 result = 1 + 1
 assert result == 2, "Dev smoke test failed basic sanity check"
 
+second_check = 2 * 3
+assert second_check == 6, "Dev smoke test failed second sanity check"
+
 print("[dummy_smoke_test_dev] Dev smoke test passed.")
