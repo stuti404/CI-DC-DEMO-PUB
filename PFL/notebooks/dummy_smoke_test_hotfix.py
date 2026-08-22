@@ -18,4 +18,7 @@ print("[dummy_smoke_test_hotfix] Reminder: back-merge into uat + dev today, reco
 result = 1 + 1
 assert result == 2, "Hotfix smoke test failed basic sanity check"
 
+second_check = 2 * 3
+assert second_check == 6, "Hotfix smoke test failed second sanity check"
+
 print("[dummy_smoke_test_hotfix] Hotfix smoke test passed.")
