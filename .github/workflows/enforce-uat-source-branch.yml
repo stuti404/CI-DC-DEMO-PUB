@@ -25,7 +25,7 @@ jobs:
             exit 0
           fi
           case "$HEAD_REF" in
-            hotfix*)
+            *hotfix*)
               echo "OK: PR source branch '$HEAD_REF' is a hotfix back-merge (Doc Sec 10.1)."
               exit 0
               ;;
