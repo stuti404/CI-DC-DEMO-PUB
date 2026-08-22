@@ -9,7 +9,9 @@ import sys
 
 def main():
     target = os.environ.get("BUNDLE_TARGET", "dev")
+    run_id = os.environ.get("CODEBUILD_BUILD_ID", "local")
     print(f"[dummy_execute_script] Executing against '{target}' target (dummy run, no real catalogue access).")
+    print(f"[dummy_execute_script] CodeBuild run id: {run_id}")
 
     checks_passed = True
     if not checks_passed:
