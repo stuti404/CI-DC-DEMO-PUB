@@ -14,6 +14,7 @@ env = dbutils.widgets.get("environment")
 
 print(f"[dummy_smoke_test_hotfix] Running in '{env}' target - emergency fix path.")
 print("[dummy_smoke_test_hotfix] Reminder: back-merge into uat + dev today, record commit hash in the ticket.")
+print("[dummy_smoke_test_hotfix] Back-merge tracked until closed - see PFL-0000 ticket.")
 
 result = 1 + 1
 assert result == 2, "Hotfix smoke test failed basic sanity check"
