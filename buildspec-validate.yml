@@ -1,6 +1,12 @@
 # Runs on every push/PR, all branches (required GitHub status check, Doc Sec 4/6).
 version: 0.2
 
+# TEMPORARY: no admin-created service principal exists yet, so this
+# authenticates with a personal access token instead (Doc Sec 5.1).
+env:
+  secrets-manager:
+    DATABRICKS_TOKEN: "databricks-dummy-token-cicd-demo:DATABRICKS_TOKEN"
+
 phases:
   install:
     commands:
@@ -8,6 +14,7 @@ phases:
       - curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
   pre_build:
     commands:
+      - export DATABRICKS_HOST=$DATABRICKS_HOST_DEV
       - echo "Validating bundle against target=dev (validate never deploys)"
   build:
     commands:
