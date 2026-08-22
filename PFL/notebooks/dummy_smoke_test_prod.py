@@ -17,4 +17,7 @@ print("[dummy_smoke_test_prod] L2 merge review + L3 manual approval both passed 
 result = 1 + 1
 assert result == 2, "Prod smoke test failed basic sanity check"
 
+second_check = 2 * 3
+assert second_check == 6, "Prod smoke test failed second sanity check"
+
 print("[dummy_smoke_test_prod] Prod smoke test passed. No real catalogue data touched.")
