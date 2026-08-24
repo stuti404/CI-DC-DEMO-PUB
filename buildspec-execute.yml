@@ -1,10 +1,5 @@
-# Triggered on push under PFL_EXECUTE/** (Doc Sec 7 trigger matrix).
-# Builds and runs the execute artefact against the target catalogue.
 version: 0.2
 
-# TEMPORARY: no admin-created service principal exists yet, so this
-# authenticates with a personal access token instead. Swap back to
-# DATABRICKS_SP_CLIENT_ID/SECRET once an SP is available (Doc Sec 5.1).
 env:
   secrets-manager:
     DATABRICKS_TOKEN: "databricks-dummy-token-cicd-demo:DATABRICKS_TOKEN"
@@ -18,7 +13,6 @@ phases:
           refs/heads/uat)  export BUNDLE_TARGET=uat ; export DATABRICKS_HOST=$DATABRICKS_HOST_UAT ;;
           *)                export BUNDLE_TARGET=dev ; export DATABRICKS_HOST=$DATABRICKS_HOST_DEV ;;
         esac
-      - echo "Executing dummy artefact against target=$BUNDLE_TARGET"
   build:
     commands:
       - python PFL_EXECUTE/dummy_execute_script.py
