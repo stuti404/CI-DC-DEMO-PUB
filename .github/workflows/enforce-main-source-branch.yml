@@ -1,0 +1,25 @@
+name: Enforce Main Source Branch
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, edited]
+
+jobs:
+  check-source-branch:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify PR source is uat or a hotfix
+        run: |
+          HEAD_REF="${{ github.event.pull_request.head.ref }}"
+          if [ "$HEAD_REF" = "uat" ]; then
+            exit 0
+          fi
+          case "$HEAD_REF" in
+            *hotfix*)
+              exit 0
+              ;;
+          esac
+          echo "PRs into main must come from uat, or be a hotfix."
+          echo "This PR's source branch is '$HEAD_REF'."
+          exit 1
