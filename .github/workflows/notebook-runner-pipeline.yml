@@ -1,21 +1,3 @@
-# End-to-end notebook pipeline: GitHub -> AWS CodeBuild (Runner project) -> Databricks.
-#
-# Unlike buildspec-validate/publish/execute.yml (webhook-triggered "Default"
-# CodeBuild projects), this workflow runs on a CodeBuild "Runner project" -
-# a self-hosted GitHub Actions runner backed by CodeBuild compute. GitHub
-# Actions owns the trigger/orchestration; CodeBuild only supplies the runner.
-#
-# Setup required before this workflow can run - see docs/codebuild-runner-setup.md:
-#   1. A CodeBuild project of type RUNNER, runner type GITHUB_ACTIONS, labeled
-#      to match the `runs-on:` value below.
-#   2. The GitHub App / OAuth connection authorizing that project against
-#      this repo (Runner projects self-register as a repo-level runner).
-#   3. Secrets Manager secret databricks-dummy-token-cicd-demo:DATABRICKS_TOKEN
-#      and repo/environment variables DATABRICKS_HOST_DEV/_UAT/_PROD,
-#      DATABRICKS_SP_CLIENT_ID (same values already used by the buildspecs).
-#   4. An OIDC deploy role (not static IAM keys) if the artifact-publish step
-#      below is pointed at S3 - see docs/codebuild-runner-setup.md Step 4.
-
 name: notebook-runner-pipeline
 
 on:
@@ -28,13 +10,11 @@ on:
     branches: [dev, uat, main]
 
 permissions:
-  id-token: write   # for OIDC to AWS in the artifact-publish job; no static keys
+  id-token: write
   contents: read
 
 jobs:
   validate:
-    # CodeBuild Runner projects are addressed via the codebuild-<project>-<run-id>-<attempt>
-    # label convention; the project itself is created as a "Runner project" (see docs).
     runs-on: codebuild-pfl-databricks-runner-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - uses: actions/checkout@v4
@@ -81,22 +61,20 @@ jobs:
       - name: Install Databricks CLI
         run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
 
-      - name: Deploy bundle (publish notebooks to Databricks workspace)
+      - name: Deploy bundle
         env:
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
           DATABRICKS_HOST: >-
             ${{ steps.target.outputs.target == 'prod' && vars.DATABRICKS_HOST_PROD
              || steps.target.outputs.target == 'uat'  && vars.DATABRICKS_HOST_UAT
              || vars.DATABRICKS_HOST_DEV }}
-          DATABRICKS_SP_CLIENT_ID: ${{ vars.DATABRICKS_SP_CLIENT_ID }}
         run: databricks bundle deploy -t ${{ steps.target.outputs.target }}
 
-      - name: Package published bundle as build artifact
+      - name: Package bundle as build artifact
         run: |
           mkdir -p dist
           zip -r "dist/pfl-bundle-${{ steps.target.outputs.target }}-${{ github.sha }}.zip" PFL databricks.yml
 
-      # Publishes the artifact to GitHub Actions (downloadable from the run summary).
       - name: Publish artifact (GitHub Actions)
         uses: actions/upload-artifact@v4
         with:
@@ -104,8 +82,6 @@ jobs:
           path: dist/*.zip
           retention-days: 30
 
-      # Optional durable copy in S3, using OIDC (no static AWS keys). Requires
-      # the deploy role from docs/codebuild-runner-setup.md Step 4.
       - name: Configure AWS credentials (OIDC)
         if: vars.ARTIFACT_S3_BUCKET != ''
         uses: aws-actions/configure-aws-credentials@v4
