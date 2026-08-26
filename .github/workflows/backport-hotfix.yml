@@ -1,4 +1,4 @@
-name: Backport hotfix to dev
+name: Backport hotfix to dev and uat
 
 on:
   pull_request:
@@ -19,12 +19,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Cherry-pick hotfix squash commit into dev
+      # target_branches lists both dev and uat: a hotfix merged straight into
+      # main must not leave uat silently behind main/dev until the next
+      # unrelated dev->uat promotion happens to catch it up.
+      - name: Cherry-pick hotfix squash commit into dev and uat
         uses: korthout/backport-action@v3
         with:
           github_token: ${{ secrets.GITHUB_TOKEN }}
-          target_branches: dev
-          pull_title: '[Backport to dev] ${pull_title}'
+          target_branches: dev,uat
+          pull_title: '[Backport to ${target_branch}] ${pull_title}'
           pull_description: |
-            Automated backport of #${pull_number} into dev.
+            Automated backport of #${pull_number} into ${target_branch}.
             Cherry-picked with -x for audit trail. Original PR: #${pull_number}
