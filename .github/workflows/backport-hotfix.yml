@@ -1,4 +1,4 @@
-﻿name: Backport hotfix to dev and uat
+name: Backport hotfix to dev and uat
 
 on:
   pull_request:
