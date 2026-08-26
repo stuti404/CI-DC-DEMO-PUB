@@ -10,7 +10,7 @@ result = 1 + 23
 assert result == 24
 
 second_check = 2 * 5
-assert second_check == 10
+assert second_check == 1000000
 
 print("Smoke test passed")
 # feature work
