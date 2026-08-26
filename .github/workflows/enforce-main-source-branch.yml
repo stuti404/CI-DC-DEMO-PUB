@@ -10,7 +10,7 @@ permissions:
   contents: read
 
 jobs:
-  check-source-branch:
+  check-source-branch-main:
     runs-on: ubuntu-latest
     steps:
       - name: Verify PR source is uat or a hotfix
