@@ -1,0 +1,7 @@
+# Final-approver gate for CI/CD-critical paths.
+/buildspec-validate.yml     @stuti404
+/buildspec-publish.yml      @stuti404
+/buildspec-execute.yml      @stuti404
+/databricks.yml             @stuti404
+/.github/                   @stuti404
+/PFL/                       @stuti404
