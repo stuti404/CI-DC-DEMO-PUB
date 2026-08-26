@@ -5,6 +5,10 @@ on:
     branches: [uat]
     types: [opened, synchronize, reopened, edited]
 
+permissions:
+  pull-requests: write
+  contents: read
+
 jobs:
   check-source-branch:
     runs-on: ubuntu-latest
@@ -18,3 +22,14 @@ jobs:
           echo "PRs into uat must come from dev."
           echo "This PR's source branch is '$HEAD_REF'."
           exit 1
+
+      - name: Auto-close on rejection
+        if: failure() && github.event.action == 'opened'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          HEAD_REF="${{ github.event.pull_request.head.ref }}"
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --body "Closing automatically: PRs into \`uat\` must come from \`dev\`. This PR's source branch is \`$HEAD_REF\`, which is not allowed."
+          gh pr close "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}"
