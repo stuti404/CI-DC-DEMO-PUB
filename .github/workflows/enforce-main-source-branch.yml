@@ -41,3 +41,74 @@ jobs:
             --repo "${{ github.repository }}" \
             --body "Closing automatically: PRs into \`main\` must come from \`uat\` or a \`hotfix/*\` branch. This PR's source branch is \`$HEAD_REF\`, which is not allowed. Open a PR into \`uat\` first, then promote \`uat\` into \`main\` separately."
           gh pr close "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}"
+
+  check-pfl-execute-single-new-file:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify hotfix adds exactly one new PFL_EXECUTE file, no name collision on main
+        id: check
+        run: |
+          HEAD_REF="${{ github.event.pull_request.head.ref }}"
+          case "$HEAD_REF" in
+            hotfix|hotfix/*) ;;
+            *)
+              echo "Not a hotfix PR - the PFL_EXECUTE single-new-file rule does not apply."
+              exit 0
+              ;;
+          esac
+
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+
+          ADDED_FILES=$(git diff --name-status --diff-filter=A "$BASE_SHA" "$HEAD_SHA" -- PFL_EXECUTE/ | cut -f2)
+          COUNT=$(printf '%s\n' "$ADDED_FILES" | grep -c . || true)
+
+          if [ "$COUNT" -eq 0 ]; then
+            echo "reason=count" >> "$GITHUB_OUTPUT"
+            echo "Hotfix PRs into main must add exactly one new file under PFL_EXECUTE/. Found 0 new files."
+            exit 1
+          fi
+
+          if [ "$COUNT" -gt 1 ]; then
+            echo "reason=count" >> "$GITHUB_OUTPUT"
+            echo "Hotfix PRs into main must add exactly one new file under PFL_EXECUTE/. Found $COUNT:"
+            printf '%s\n' "$ADDED_FILES"
+            exit 1
+          fi
+
+          NEW_FILE=$(printf '%s' "$ADDED_FILES")
+          echo "new_file=$NEW_FILE" >> "$GITHUB_OUTPUT"
+          echo "Single new file: $NEW_FILE"
+
+          # Checked against main's CURRENT tip, not this PR's recorded base sha -
+          # a second hotfix opened before an earlier one merges would otherwise
+          # not see the name collision in its own diff.
+          git fetch --no-tags origin main
+          if git cat-file -e "origin/main:$NEW_FILE" 2>/dev/null; then
+            echo "reason=exists" >> "$GITHUB_OUTPUT"
+            echo "$NEW_FILE already exists on main. This already exists."
+            exit 1
+          fi
+
+          echo "OK: $NEW_FILE is new and does not collide with main."
+
+      - name: Auto-close on rejection
+        if: failure() && github.event.action == 'opened'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          NEW_FILE="${{ steps.check.outputs.new_file }}"
+          REASON="${{ steps.check.outputs.reason }}"
+          if [ "$REASON" = "exists" ]; then
+            BODY="Closing automatically: \`$NEW_FILE\` already exists on \`main\`. This already exists - a hotfix must add exactly one *new*, uniquely-named file under \`PFL_EXECUTE/\`. Rename the file, or check whether this hotfix has already been applied."
+          else
+            BODY="Closing automatically: a hotfix PR into \`main\` must add exactly one new file under \`PFL_EXECUTE/\` (not zero, not more than one, and not just a modification to an existing file)."
+          fi
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --body "$BODY"
+          gh pr close "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}"
