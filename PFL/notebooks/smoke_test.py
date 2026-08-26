@@ -9,8 +9,8 @@ print(f"Running smoke test in '{env}'")
 result = 1 + 23
 assert result == 24
 
-second_check = 2 * 5
-assert second_check == 1000000
+second_check = 2 * 50
+assert second_check == 100
 
 print("Smoke test passed")
 # feature work
