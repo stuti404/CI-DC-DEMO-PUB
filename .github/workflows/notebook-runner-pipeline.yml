@@ -88,6 +88,10 @@ jobs:
             fi
           done < changed_files.txt
 
+          if [ -z "$(find incremental_bundle -type f)" ]; then
+            echo "No PFL/ or databricks.yml changes in this push." > incremental_bundle/NO_CHANGES.txt
+          fi
+
           cd incremental_bundle
 
           zip -r "../dist/pfl-bundle-${{ steps.target.outputs.target }}-${{ github.sha }}.zip" .
@@ -150,6 +154,10 @@ jobs:
               cp -- "$file" "incremental_bundle/$file"
             fi
           done < changed_files.txt
+
+          if [ -z "$(find incremental_bundle -type f)" ]; then
+            echo "No PFL/ or databricks.yml changes in this push." > incremental_bundle/NO_CHANGES.txt
+          fi
 
           cd incremental_bundle
 
