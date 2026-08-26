@@ -1,0 +1,30 @@
+name: Backport hotfix to dev
+
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  backport:
+    if: >
+      github.event.pull_request.merged == true &&
+      (github.event.pull_request.head.ref == 'hotfix' ||
+       startsWith(github.event.pull_request.head.ref, 'hotfix/'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Cherry-pick hotfix squash commit into dev
+        uses: korthout/backport-action@v3
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          target_branches: dev
+          pull_title: '[Backport to dev] ${pull_title}'
+          pull_description: |
+            Automated backport of #${pull_number} into dev.
+            Cherry-picked with -x for audit trail. Original PR: #${pull_number}
