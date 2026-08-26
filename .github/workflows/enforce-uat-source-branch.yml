@@ -15,6 +15,9 @@ jobs:
     steps:
       - name: Verify PR source is dev
         run: |
+          # Exact-match by design: git ref names cannot contain leading/trailing
+          # whitespace, and case differences (e.g. "Dev" vs "dev") are meaningfully
+          # different branches that should NOT be treated as equivalent.
           HEAD_REF="${{ github.event.pull_request.head.ref }}"
           if [ "$HEAD_REF" = "dev" ]; then
             exit 0
