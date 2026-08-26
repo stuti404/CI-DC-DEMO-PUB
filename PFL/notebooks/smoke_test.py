@@ -6,11 +6,11 @@ env = dbutils.widgets.get("environment")
 
 print(f"Running smoke test in '{env}'")
 
-result = 1 + 21
-assert result == 22
+result = 1 + 25
+assert result == 26
 
-second_check = 2 * 3
-assert second_check == 6
+second_check = 2 * 1
+assert second_check == 2
 
 print("Smoke test passed")
 # feature work
