@@ -16,10 +16,10 @@ jobs:
             exit 0
           fi
           case "$HEAD_REF" in
-            *hotfix*)
+            hotfix|hotfix/*)
               exit 0
               ;;
           esac
-          echo "PRs into main must come from uat, or be a hotfix."
+          echo "PRs into main must come from uat, or a hotfix/* branch."
           echo "This PR's source branch is '$HEAD_REF'."
           exit 1
