@@ -5,21 +5,34 @@ on:
     branches: [uat]
     types: [opened, synchronize, reopened, edited]
 
+permissions:
+  pull-requests: write
+  contents: read
+
 jobs:
-  check-source-branch:
+  check-source-branch-uat:
     runs-on: ubuntu-latest
     steps:
-      - name: Verify PR source is dev or a hotfix back-merge
+      - name: Verify PR source is dev
         run: |
+          # Exact-match by design: git ref names cannot contain leading/trailing
+          # whitespace, and case differences (e.g. "Dev" vs "dev") are meaningfully
+          # different branches that should NOT be treated as equivalent.
           HEAD_REF="${{ github.event.pull_request.head.ref }}"
           if [ "$HEAD_REF" = "dev" ]; then
             exit 0
           fi
-          case "$HEAD_REF" in
-            *hotfix*)
-              exit 0
-              ;;
-          esac
-          echo "PRs into uat must come from dev, or be a hotfix back-merge."
+          echo "PRs into uat must come from dev."
           echo "This PR's source branch is '$HEAD_REF'."
           exit 1
+
+      - name: Auto-close on rejection
+        if: failure() && github.event.action == 'opened'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          HEAD_REF="${{ github.event.pull_request.head.ref }}"
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --body "Closing automatically: PRs into \`uat\` must come from \`dev\`. This PR's source branch is \`$HEAD_REF\`, which is not allowed."
+          gh pr close "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}"

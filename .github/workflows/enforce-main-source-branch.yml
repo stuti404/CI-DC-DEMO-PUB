@@ -5,12 +5,19 @@ on:
     branches: [main]
     types: [opened, synchronize, reopened, edited]
 
+permissions:
+  pull-requests: write
+  contents: read
+
 jobs:
-  check-source-branch:
+  check-source-branch-main:
     runs-on: ubuntu-latest
     steps:
       - name: Verify PR source is uat or a hotfix
         run: |
+          # Exact-match by design: git ref names cannot contain leading/trailing
+          # whitespace, and case differences (e.g. "Uat" vs "uat") are meaningfully
+          # different branches that should NOT be treated as equivalent.
           HEAD_REF="${{ github.event.pull_request.head.ref }}"
           if [ "$HEAD_REF" = "uat" ]; then
             exit 0
@@ -23,3 +30,14 @@ jobs:
           echo "PRs into main must come from uat, or a hotfix/* branch."
           echo "This PR's source branch is '$HEAD_REF'."
           exit 1
+
+      - name: Auto-close on rejection
+        if: failure() && github.event.action == 'opened'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          HEAD_REF="${{ github.event.pull_request.head.ref }}"
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --body "Closing automatically: PRs into \`main\` must come from \`uat\` or a \`hotfix/*\` branch. This PR's source branch is \`$HEAD_REF\`, which is not allowed. Open a PR into \`uat\` first, then promote \`uat\` into \`main\` separately."
+          gh pr close "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}"
