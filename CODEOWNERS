@@ -1,7 +1,30 @@
-# Final-approver gate for CI/CD-critical paths.
-/buildspec-validate.yml     @stuti404
-/buildspec-publish.yml      @stuti404
-/buildspec-execute.yml      @stuti404
-/databricks.yml             @stuti404
-/.github/                   @stuti404
-/PFL/                       @stuti404
+# CODEOWNERS
+# ---------------------------------------------------------------------------
+# Real-org extension pattern (not active in this 2-account demo environment):
+# once a second real reviewer exists, hand /PFL/notebooks/ (day-to-day
+# notebook code) to them directly - it's already split out below so this
+# requires no restructuring, just changing the owner on one line.
+# Prod-affecting paths (bundle target config, job resources, pipeline
+# definitions) stay with a stricter/senior owner even after that split.
+#
+# Example with real teams in a larger org:
+#   /databricks.yml         @org/prod-approvers
+#   /PFL/resources/          @org/prod-approvers
+#   /PFL/notebooks/           @org/qa-approvers
+#   /.github/                 @org/platform-team
+# ---------------------------------------------------------------------------
+
+# Live demo state: 2 real accounts (stuti404, Stuti-Ganit). stuti404 is the
+# sole approver everywhere because Stuti-Ganit is the primary PR author for
+# dev/uat and GitHub structurally forbids self-approval - adding
+# Stuti-Ganit as a CODEOWNERS entry here would not add a real second
+# reviewer, it would silently fall back to stuti404 anyway. Per-branch
+# strictness is instead enforced via branch-protection settings
+# (enforce_admins, linear history on main) and the production GitHub
+# Environment's required-reviewer gate on publish-prod, not by forking this
+# file's content across branches.
+
+/databricks.yml       @stuti404
+/PFL/resources/       @stuti404
+/PFL/notebooks/       @stuti404
+/.github/             @stuti404
