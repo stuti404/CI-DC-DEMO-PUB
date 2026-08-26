@@ -70,8 +70,31 @@ jobs:
 
       - name: Package bundle as build artifact
         run: |
-          mkdir -p dist
-          zip -r "dist/pfl-bundle-${{ steps.target.outputs.target }}-${{ github.sha }}.zip" PFL databricks.yml
+          mkdir -p dist incremental_bundle
+
+          git fetch --no-tags --unshallow 2>/dev/null || true
+
+          git diff --name-only --diff-filter=ACMR \
+            "${{ github.event.before }}" "${{ github.sha }}" \
+            -- PFL/ databricks.yml > changed_files.txt
+
+          echo "Changed files:"
+          cat changed_files.txt
+
+          while IFS= read -r file; do
+            if [ -n "$file" ] && [ -f "$file" ]; then
+              mkdir -p "incremental_bundle/$(dirname "$file")"
+              cp -- "$file" "incremental_bundle/$file"
+            fi
+          done < changed_files.txt
+
+          if [ -z "$(find incremental_bundle -type f)" ]; then
+            echo "No PFL/ or databricks.yml changes in this push." > incremental_bundle/NO_CHANGES.txt
+          fi
+
+          cd incremental_bundle
+
+          zip -r "../dist/pfl-bundle-${{ steps.target.outputs.target }}-${{ github.sha }}.zip" .
 
       - name: Publish artifact (GitHub Actions)
         uses: actions/upload-artifact@v4
@@ -114,8 +137,31 @@ jobs:
 
       - name: Package bundle as build artifact
         run: |
-          mkdir -p dist
-          zip -r "dist/pfl-bundle-prod-${{ github.sha }}.zip" PFL databricks.yml
+          mkdir -p dist incremental_bundle
+
+          git fetch --no-tags --unshallow 2>/dev/null || true
+
+          git diff --name-only --diff-filter=ACMR \
+            "${{ github.event.before }}" "${{ github.sha }}" \
+            -- PFL/ databricks.yml > changed_files.txt
+
+          echo "Changed files:"
+          cat changed_files.txt
+
+          while IFS= read -r file; do
+            if [ -n "$file" ] && [ -f "$file" ]; then
+              mkdir -p "incremental_bundle/$(dirname "$file")"
+              cp -- "$file" "incremental_bundle/$file"
+            fi
+          done < changed_files.txt
+
+          if [ -z "$(find incremental_bundle -type f)" ]; then
+            echo "No PFL/ or databricks.yml changes in this push." > incremental_bundle/NO_CHANGES.txt
+          fi
+
+          cd incremental_bundle
+
+          zip -r "../dist/pfl-bundle-prod-${{ github.sha }}.zip" .
 
       - name: Publish artifact (GitHub Actions)
         uses: actions/upload-artifact@v4
