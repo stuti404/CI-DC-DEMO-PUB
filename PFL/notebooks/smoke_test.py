@@ -18,3 +18,4 @@ print("Smoke test passed")
 # Retest marker: full-flow-recheck
 # Verify pipeline-hardening plan end-to-end
 # Incremental artifact test: verified
+# Playwright flow test: verified live in browser
