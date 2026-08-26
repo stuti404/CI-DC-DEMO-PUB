@@ -40,9 +40,9 @@ jobs:
       - name: Compile execute artefact
         run: python -m py_compile PFL_EXECUTE/dummy_execute_script.py
 
-  publish:
+  publish-nonprod:
     needs: validate
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && github.ref != 'refs/heads/main'
     runs-on: codebuild-pfl-databricks-runner-${{ github.run_id }}-${{ github.run_attempt }}
     outputs:
       target: ${{ steps.target.outputs.target }}
@@ -53,9 +53,8 @@ jobs:
         id: target
         run: |
           case "${GITHUB_REF##*/}" in
-            main) echo "target=prod" >> "$GITHUB_OUTPUT" ;;
-            uat)  echo "target=uat"  >> "$GITHUB_OUTPUT" ;;
-            *)    echo "target=dev"  >> "$GITHUB_OUTPUT" ;;
+            uat) echo "target=uat" >> "$GITHUB_OUTPUT" ;;
+            *)   echo "target=dev" >> "$GITHUB_OUTPUT" ;;
           esac
 
       - name: Install Databricks CLI
@@ -65,8 +64,7 @@ jobs:
         env:
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
           DATABRICKS_HOST: >-
-            ${{ steps.target.outputs.target == 'prod' && vars.DATABRICKS_HOST_PROD
-             || steps.target.outputs.target == 'uat'  && vars.DATABRICKS_HOST_UAT
+            ${{ steps.target.outputs.target == 'uat' && vars.DATABRICKS_HOST_UAT
              || vars.DATABRICKS_HOST_DEV }}
         run: databricks bundle deploy -t ${{ steps.target.outputs.target }}
 
@@ -95,10 +93,56 @@ jobs:
           aws s3 cp "dist/pfl-bundle-${{ steps.target.outputs.target }}-${{ github.sha }}.zip" \
             "s3://${{ vars.ARTIFACT_S3_BUCKET }}/pfl/${{ steps.target.outputs.target }}/"
 
-  execute:
-    needs: publish
-    if: github.event_name == 'push'
+  publish-prod:
+    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: codebuild-pfl-databricks-runner-${{ github.run_id }}-${{ github.run_attempt }}
+    environment: production
+    outputs:
+      target: prod
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Databricks CLI
+        run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
+
+      - name: Deploy bundle
+        env:
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST_PROD }}
+        run: databricks bundle deploy -t prod
+
+      - name: Package bundle as build artifact
+        run: |
+          mkdir -p dist
+          zip -r "dist/pfl-bundle-prod-${{ github.sha }}.zip" PFL databricks.yml
+
+      - name: Publish artifact (GitHub Actions)
+        uses: actions/upload-artifact@v4
+        with:
+          name: pfl-bundle-prod-${{ github.sha }}
+          path: dist/*.zip
+          retention-days: 30
+
+      - name: Configure AWS credentials (OIDC)
+        if: vars.ARTIFACT_S3_BUCKET != ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.ARTIFACT_PUBLISH_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Publish artifact (S3)
+        if: vars.ARTIFACT_S3_BUCKET != ''
+        run: |
+          aws s3 cp "dist/pfl-bundle-prod-${{ github.sha }}.zip" \
+            "s3://${{ vars.ARTIFACT_S3_BUCKET }}/pfl/prod/"
+
+  execute:
+    needs: [publish-nonprod, publish-prod]
+    if: always() && github.event_name == 'push' && (needs['publish-nonprod'].result == 'success' || needs['publish-prod'].result == 'success')
+    runs-on: codebuild-pfl-databricks-runner-${{ github.run_id }}-${{ github.run_attempt }}
+    env:
+      TARGET: ${{ needs['publish-prod'].outputs.target || needs['publish-nonprod'].outputs.target }}
     steps:
       - uses: actions/checkout@v4
 
@@ -109,12 +153,12 @@ jobs:
         env:
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
           DATABRICKS_HOST: >-
-            ${{ needs.publish.outputs.target == 'prod' && vars.DATABRICKS_HOST_PROD
-             || needs.publish.outputs.target == 'uat'  && vars.DATABRICKS_HOST_UAT
+            ${{ env.TARGET == 'prod' && vars.DATABRICKS_HOST_PROD
+             || env.TARGET == 'uat'  && vars.DATABRICKS_HOST_UAT
              || vars.DATABRICKS_HOST_DEV }}
-        run: databricks bundle run dummy_cicd_smoke_test -t ${{ needs.publish.outputs.target }}
+        run: databricks bundle run dummy_cicd_smoke_test -t ${{ env.TARGET }}
 
       - name: Run execute artefact
         env:
-          BUNDLE_TARGET: ${{ needs.publish.outputs.target }}
+          BUNDLE_TARGET: ${{ env.TARGET }}
         run: python PFL_EXECUTE/dummy_execute_script.py
