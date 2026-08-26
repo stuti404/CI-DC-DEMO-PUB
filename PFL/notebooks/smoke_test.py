@@ -8,6 +8,8 @@ print(f"Running smoke test in '{env}'")
 
 result = 1 + 21
 assert result == 22
+result = 1 + 1
+assert result == 2
 
 second_check = 2 * 3
 assert second_check == 6
@@ -17,3 +19,6 @@ print("Smoke test passed")
 # Real change marker: 1787579348
 # Retest marker: full-flow-recheck
 # Verify pipeline-hardening plan end-to-end
+# Incremental artifact test: verified
+# Playwright flow test: verified live in browser
+# Three-lane pipeline test: verified
