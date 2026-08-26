@@ -40,22 +40,14 @@ jobs:
       - name: Compile execute artefact
         run: python -m py_compile PFL_EXECUTE/dummy_execute_script.py
 
-  publish-nonprod:
+  publish-dev:
     needs: validate
-    if: github.event_name == 'push' && github.ref != 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     runs-on: codebuild-pfl-databricks-runner-${{ github.run_id }}-${{ github.run_attempt }}
     outputs:
-      target: ${{ steps.target.outputs.target }}
+      target: dev
     steps:
       - uses: actions/checkout@v4
-
-      - name: Resolve bundle target from branch
-        id: target
-        run: |
-          case "${GITHUB_REF##*/}" in
-            uat) echo "target=uat" >> "$GITHUB_OUTPUT" ;;
-            *)   echo "target=dev" >> "$GITHUB_OUTPUT" ;;
-          esac
 
       - name: Install Databricks CLI
         run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
@@ -63,10 +55,8 @@ jobs:
       - name: Deploy bundle
         env:
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-          DATABRICKS_HOST: >-
-            ${{ steps.target.outputs.target == 'uat' && vars.DATABRICKS_HOST_UAT
-             || vars.DATABRICKS_HOST_DEV }}
-        run: databricks bundle deploy -t ${{ steps.target.outputs.target }}
+          DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST_DEV }}
+        run: databricks bundle deploy -t dev
 
       - name: Package bundle as build artifact
         run: |
@@ -94,12 +84,12 @@ jobs:
 
           cd incremental_bundle
 
-          zip -r "../dist/pfl-bundle-${{ steps.target.outputs.target }}-${{ github.sha }}.zip" .
+          zip -r "../dist/pfl-bundle-dev-${{ github.sha }}.zip" .
 
       - name: Publish artifact (GitHub Actions)
         uses: actions/upload-artifact@v4
         with:
-          name: pfl-bundle-${{ steps.target.outputs.target }}-${{ github.sha }}
+          name: pfl-bundle-dev-${{ github.sha }}
           path: dist/*.zip
           retention-days: 30
 
@@ -113,8 +103,74 @@ jobs:
       - name: Publish artifact (S3)
         if: vars.ARTIFACT_S3_BUCKET != ''
         run: |
-          aws s3 cp "dist/pfl-bundle-${{ steps.target.outputs.target }}-${{ github.sha }}.zip" \
-            "s3://${{ vars.ARTIFACT_S3_BUCKET }}/pfl/${{ steps.target.outputs.target }}/"
+          aws s3 cp "dist/pfl-bundle-dev-${{ github.sha }}.zip" \
+            "s3://${{ vars.ARTIFACT_S3_BUCKET }}/pfl/dev/"
+
+  publish-uat:
+    needs: validate
+    if: github.event_name == 'push' && github.ref == 'refs/heads/uat'
+    runs-on: codebuild-pfl-databricks-runner-${{ github.run_id }}-${{ github.run_attempt }}
+    outputs:
+      target: uat
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Databricks CLI
+        run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
+
+      - name: Deploy bundle
+        env:
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST_UAT }}
+        run: databricks bundle deploy -t uat
+
+      - name: Package bundle as build artifact
+        run: |
+          mkdir -p dist incremental_bundle
+
+          git fetch --no-tags --unshallow 2>/dev/null || true
+
+          git diff --name-only --diff-filter=ACMR \
+            "${{ github.event.before }}" "${{ github.sha }}" \
+            -- PFL/ databricks.yml > changed_files.txt
+
+          echo "Changed files:"
+          cat changed_files.txt
+
+          while IFS= read -r file; do
+            if [ -n "$file" ] && [ -f "$file" ]; then
+              mkdir -p "incremental_bundle/$(dirname "$file")"
+              cp -- "$file" "incremental_bundle/$file"
+            fi
+          done < changed_files.txt
+
+          if [ -z "$(find incremental_bundle -type f)" ]; then
+            echo "No PFL/ or databricks.yml changes in this push." > incremental_bundle/NO_CHANGES.txt
+          fi
+
+          cd incremental_bundle
+
+          zip -r "../dist/pfl-bundle-uat-${{ github.sha }}.zip" .
+
+      - name: Publish artifact (GitHub Actions)
+        uses: actions/upload-artifact@v4
+        with:
+          name: pfl-bundle-uat-${{ github.sha }}
+          path: dist/*.zip
+          retention-days: 30
+
+      - name: Configure AWS credentials (OIDC)
+        if: vars.ARTIFACT_S3_BUCKET != ''
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.ARTIFACT_PUBLISH_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Publish artifact (S3)
+        if: vars.ARTIFACT_S3_BUCKET != ''
+        run: |
+          aws s3 cp "dist/pfl-bundle-uat-${{ github.sha }}.zip" \
+            "s3://${{ vars.ARTIFACT_S3_BUCKET }}/pfl/uat/"
 
   publish-prod:
     needs: validate
@@ -184,11 +240,15 @@ jobs:
             "s3://${{ vars.ARTIFACT_S3_BUCKET }}/pfl/prod/"
 
   execute:
-    needs: [publish-nonprod, publish-prod]
-    if: always() && github.event_name == 'push' && (needs['publish-nonprod'].result == 'success' || needs['publish-prod'].result == 'success')
+    needs: [publish-dev, publish-uat, publish-prod]
+    if: >
+      always() && github.event_name == 'push' &&
+      (needs['publish-dev'].result == 'success' ||
+       needs['publish-uat'].result == 'success' ||
+       needs['publish-prod'].result == 'success')
     runs-on: codebuild-pfl-databricks-runner-${{ github.run_id }}-${{ github.run_attempt }}
     env:
-      TARGET: ${{ needs['publish-prod'].outputs.target || needs['publish-nonprod'].outputs.target }}
+      TARGET: ${{ needs['publish-prod'].outputs.target || needs['publish-uat'].outputs.target || needs['publish-dev'].outputs.target }}
     steps:
       - uses: actions/checkout@v4
 
