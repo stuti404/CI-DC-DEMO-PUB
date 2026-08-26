@@ -40,6 +40,17 @@ jobs:
       - name: Compile execute artefact
         run: python -m py_compile PFL_EXECUTE/dummy_execute_script.py
 
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history — catch secrets introduced then "fixed" in a later commit on the same PR
+      - name: Gitleaks scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   publish-dev:
     needs: validate
     if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
