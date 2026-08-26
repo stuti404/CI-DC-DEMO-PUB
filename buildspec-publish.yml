@@ -12,9 +12,10 @@ phases:
     commands:
       - |
         case "$CODEBUILD_WEBHOOK_HEAD_REF" in
-          refs/heads/main) export BUNDLE_TARGET=prod ; export DATABRICKS_HOST=$DATABRICKS_HOST_PROD ;;
-          refs/heads/uat)  export BUNDLE_TARGET=uat ; export DATABRICKS_HOST=$DATABRICKS_HOST_UAT ;;
-          *)                export BUNDLE_TARGET=dev ; export DATABRICKS_HOST=$DATABRICKS_HOST_DEV ;;
+          refs/heads/main)   export BUNDLE_TARGET=prod ; export DATABRICKS_HOST=$DATABRICKS_HOST_PROD ;;
+          refs/heads/uat)    export BUNDLE_TARGET=uat ; export DATABRICKS_HOST=$DATABRICKS_HOST_UAT ;;
+          refs/heads/hotfix) export BUNDLE_TARGET=dev ; export DATABRICKS_HOST=$DATABRICKS_HOST_DEV ;;
+          *)                 export BUNDLE_TARGET=dev ; export DATABRICKS_HOST=$DATABRICKS_HOST_DEV ;;
         esac
   build:
     commands:
