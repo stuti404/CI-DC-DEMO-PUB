@@ -22,7 +22,16 @@ jobs:
           if [ "$HEAD_REF" = "dev" ]; then
             exit 0
           fi
-          echo "PRs into uat must come from dev."
+          # Also allow the automated hotfix-backport PRs opened by
+          # backport-hotfix.yml (korthout/backport-action names them
+          # backport-<pr-number>-to-uat) — otherwise this check would
+          # auto-close the very PRs that keep uat in sync with main.
+          case "$HEAD_REF" in
+            backport-*-to-uat)
+              exit 0
+              ;;
+          esac
+          echo "PRs into uat must come from dev, or an automated hotfix-backport branch."
           echo "This PR's source branch is '$HEAD_REF'."
           exit 1
 
