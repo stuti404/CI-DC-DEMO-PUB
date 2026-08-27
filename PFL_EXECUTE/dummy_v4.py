@@ -8,10 +8,11 @@ def main():
     target = os.environ.get("BUNDLE_TARGET", "dev")
     run_id = os.environ.get("CODEBUILD_BUILD_ID", "local")
     print(f"Executing against '{target}' (run {run_id})")
+    print(f"Executing against '{target}'")
 
     checks_passed = True
     if not checks_passed:
-        print("Execute smoke test FAILED")
+        print("Execute smoke test FAIL")
         sys.exit(1)
 
     print("Execute smoke test passed")
