@@ -2,9 +2,50 @@ resources:
   jobs:
     dummy_cicd_smoke_test:
       name: "[${bundle.target}] dummy-cicd-smoke-test"
+      max_concurrent_runs: 1
+      tags:
+        managed_by: databricks-asset-bundle
+        pipeline: pfl-cicd-demo
+
+      # Paused by default - this is a demo pipeline, not a real schedule.
+      # Flip pause_status to UNPAUSED once real data/logic replaces the
+      # smoke-test notebooks.
+      schedule:
+        quartz_cron_expression: "0 0 6 * * ?"
+        timezone_id: "UTC"
+        pause_status: PAUSED
+
+      job_clusters:
+        - job_cluster_key: pfl_job_cluster
+          new_cluster:
+            spark_version: 15.4.x-scala2.12
+            node_type_id: i3.xlarge
+            autoscale:
+              min_workers: 1
+              max_workers: 2
+
       tasks:
-        - task_key: run_smoke_test
+        - task_key: ingest_smoke_test
+          job_cluster_key: pfl_job_cluster
           notebook_task:
             notebook_path: ../notebooks/smoke_test.py
+            base_parameters:
+              environment: ${bundle.target}
+
+        - task_key: transform_smoke_test
+          depends_on:
+            - task_key: ingest_smoke_test
+          job_cluster_key: pfl_job_cluster
+          notebook_task:
+            notebook_path: ../notebooks/smoke_v1.py
+            base_parameters:
+              environment: ${bundle.target}
+
+        - task_key: validate_smoke_test
+          depends_on:
+            - task_key: transform_smoke_test
+          job_cluster_key: pfl_job_cluster
+          notebook_task:
+            notebook_path: ../notebooks/Hotfix_v1.py
             base_parameters:
               environment: ${bundle.target}
