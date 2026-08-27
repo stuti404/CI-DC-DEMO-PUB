@@ -84,6 +84,21 @@ jobs:
           echo "new_file=$NEW_FILE" >> "$GITHUB_OUTPUT"
           echo "Single new file: $NEW_FILE"
 
+          # A hotfix must ONLY add that one new file - it must not also modify,
+          # rename, or delete any other file under PFL_EXECUTE/. The earlier
+          # ADDED_FILES check only counted additions, so a PR that added one
+          # file AND modified another slipped through undetected until this
+          # check was added.
+          ALL_CHANGED=$(git diff --name-status --diff-filter=ACMRD "$BASE_SHA" "$HEAD_SHA" -- PFL_EXECUTE/ | cut -f2)
+          EXTRA_FILES=$(printf '%s\n' "$ALL_CHANGED" | grep -v -F -x "$NEW_FILE" | grep -c . || true)
+
+          if [ "$EXTRA_FILES" -gt 0 ]; then
+            echo "reason=extra" >> "$GITHUB_OUTPUT"
+            echo "Hotfix PRs into main must ONLY add the one new PFL_EXECUTE/ file - no other files in that folder may be touched. Found extra changes:"
+            printf '%s\n' "$ALL_CHANGED" | grep -v -F -x "$NEW_FILE"
+            exit 1
+          fi
+
           # Checked against main's CURRENT tip, not this PR's recorded base sha -
           # a second hotfix opened before an earlier one merges would otherwise
           # not see the name collision in its own diff.
@@ -105,6 +120,8 @@ jobs:
           REASON="${{ steps.check.outputs.reason }}"
           if [ "$REASON" = "exists" ]; then
             BODY="Closing automatically: \`$NEW_FILE\` already exists on \`main\`. This already exists - a hotfix must add exactly one *new*, uniquely-named file under \`PFL_EXECUTE/\`. Rename the file, or check whether this hotfix has already been applied."
+          elif [ "$REASON" = "extra" ]; then
+            BODY="Closing automatically: this hotfix adds a new PFL_EXECUTE/ file but also touches other file(s) in that folder. A hotfix PR into \`main\` may ONLY add its one new file under \`PFL_EXECUTE/\` - no other file in that folder may be modified, renamed, or deleted in the same PR."
           else
             BODY="Closing automatically: a hotfix PR into \`main\` must add exactly one new file under \`PFL_EXECUTE/\` (not zero, not more than one, and not just a modification to an existing file)."
           fi
