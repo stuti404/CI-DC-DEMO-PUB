@@ -6,6 +6,7 @@ def main():
     target = os.environ.get("BUNDLE_TARGET", "dev")
     run_id = os.environ.get("CODEBUILD_BUILD_ID", "local")
     print(f"Executing against '{target}' (run {run_id})")
+    print(f"Executing against for STUTI '{target}' ")
 
     checks_passed = True
     if not checks_passed:
