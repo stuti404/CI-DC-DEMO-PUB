@@ -19,4 +19,6 @@ assert second_check == 10
 
 print("Smoke test passed")
 print("Stuti is testing")
+print("LIVE EDIT TEST - this should get wiped out by the next deploy")
+
 
