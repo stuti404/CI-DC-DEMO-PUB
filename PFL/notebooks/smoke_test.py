@@ -12,6 +12,10 @@ print(f"Running smoke test in '{env}'")
 
 result = 1 + 23
 assert result == 24
+
+result = 1 + 2
+assert result == 3
+
 temp = 10
 print(temp*3)
 second_check = 2 * 5
