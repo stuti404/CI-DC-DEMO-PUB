@@ -1,7 +1,7 @@
 # CODEOWNERS
 # ---------------------------------------------------------------------------
 # Real-org extension pattern (not active in this 2-account demo environment):
-# once a second real reviewer exists, hand /PFL/notebooks/ (day-to-day
+# once further reviewers exist, hand /PFL/notebooks/ (day-to-day
 # notebook code) to them directly - it's already split out below so this
 # requires no restructuring, just changing the owner on one line.
 # Prod-affecting paths (bundle target config, job resources, pipeline
@@ -14,17 +14,19 @@
 #   /.github/                 @org/platform-team
 # ---------------------------------------------------------------------------
 
-# Live demo state: 2 real accounts (stuti404, Stuti-Ganit). stuti404 is the
-# sole approver everywhere because Stuti-Ganit is the primary PR author for
-# dev/uat and GitHub structurally forbids self-approval - adding
-# Stuti-Ganit as a CODEOWNERS entry here would not add a real second
-# reviewer, it would silently fall back to stuti404 anyway. Per-branch
-# strictness is instead enforced via branch-protection settings
-# (enforce_admins, linear history on main) and the production GitHub
-# Environment's required-reviewer gate on publish-prod, not by forking this
-# file's content across branches.
+# Live demo state: 2 real accounts (stuti404, Stuti-Ganit), both listed as
+# owners on every path. GitHub still structurally forbids self-approval, so
+# whichever account authored a given PR can never satisfy this requirement
+# with their own approval - the OTHER listed account always has to review it.
+# This is why both names are listed everywhere rather than splitting paths
+# between them: Stuti-Ganit authors most dev/uat PRs (stuti404 approves
+# those), while stuti404 authors most promotion/admin PRs (Stuti-Ganit
+# approves those) - listing both keeps either direction covered without
+# ever silently reducing to a single approver. Matches the same two-account
+# reviewer list already used on the production GitHub Environment's
+# required-reviewer gate on publish-prod.
 
-/databricks.yml       @stuti404
-/PFL/resources/       @stuti404
-/PFL/notebooks/       @stuti404
-/.github/             @stuti404
+/databricks.yml       @stuti404 @Stuti-Ganit
+/PFL/resources/       @stuti404 @Stuti-Ganit
+/PFL/notebooks/       @stuti404 @Stuti-Ganit
+/.github/             @stuti404 @Stuti-Ganit
