@@ -14,11 +14,11 @@ result = 1 + 23
 assert result == 24
 temp = 10
 print(temp*3)
+print(temp*4)
 second_check = 2 * 5
 assert second_check == 10
 
 print("Smoke test passed")
 print("Stuti is testing")
 print("LIVE EDIT TEST - this should get wiped out by the next deploy")
-
 
