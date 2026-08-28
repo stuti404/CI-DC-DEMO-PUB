@@ -1,0 +1,50 @@
+name: Enforce Dev Source Branch
+
+on:
+  pull_request:
+    branches: [dev]
+    types: [opened, synchronize, reopened, edited]
+
+permissions:
+  pull-requests: write
+  contents: read
+
+jobs:
+  check-source-branch-dev:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify PR source is a feature branch
+        run: |
+          # Exact-match by design: git ref names cannot contain leading/trailing
+          # whitespace, and case differences (e.g. "Feature/x" vs "feature/x")
+          # are meaningfully different branches that should NOT be treated as
+          # equivalent.
+          HEAD_REF="${{ github.event.pull_request.head.ref }}"
+          case "$HEAD_REF" in
+            feature/*)
+              exit 0
+              ;;
+          esac
+          # Also allow the automated hotfix-backport PRs opened by
+          # backport-hotfix.yml (korthout/backport-action names them
+          # backport-<pr-number>-to-dev) - otherwise this check would
+          # auto-close the very PRs that keep dev in sync with main.
+          case "$HEAD_REF" in
+            backport-*-to-dev)
+              exit 0
+              ;;
+          esac
+          echo "PRs into dev must come from a feature/* branch, or an automated hotfix-backport branch."
+          echo "This PR's source branch is '$HEAD_REF'."
+          exit 1
+
+      - name: Auto-close on rejection
+        if: failure() && github.event.action == 'opened'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          HEAD_REF="${{ github.event.pull_request.head.ref }}"
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --body "Closing automatically: PRs into \`dev\` must come from a \`feature/*\` branch. This PR's source branch is \`$HEAD_REF\`, which is not allowed. Rename your branch to start with \`feature/\` and open a new PR."
+          gh pr close "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}"
