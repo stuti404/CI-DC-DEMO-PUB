@@ -36,3 +36,11 @@ resources:
             base_parameters:
               environment: ${bundle.target}
 
+        - task_key: verify_dynamic_pipeline
+          depends_on:
+            - task_key: validate_smoke_test
+          notebook_task:
+            notebook_path: ../notebooks/verify_dynamic_pipeline.py
+            base_parameters:
+              environment: ${bundle.target}
+
