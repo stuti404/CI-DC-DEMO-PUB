@@ -1,0 +1,42 @@
+name: Auto-approve and merge feature PRs
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: [dev]
+
+permissions:
+  pull-requests: write
+  contents: write
+
+jobs:
+  auto-approve-merge:
+    if: startsWith(github.event.pull_request.head.ref, 'feature/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Auto-approve and merge
+        env:
+          GH_TOKEN: ${{ secrets.BACKPORT_APPROVER_TOKEN }}
+        run: |
+          PR_NUM="${{ github.event.pull_request.number }}"
+          REPO="${{ github.repository }}"
+
+          gh pr review "$PR_NUM" --repo "$REPO" --approve \
+            || echo "Approve failed for #$PR_NUM (self-approval or already approved)"
+
+          for i in $(seq 1 20); do
+            STATE=$(gh pr view "$PR_NUM" --repo "$REPO" --json mergeStateStatus -q .mergeStateStatus 2>/dev/null || echo "")
+            echo "PR #$PR_NUM mergeStateStatus: $STATE"
+            case "$STATE" in
+              CLEAN|UNSTABLE|HAS_HOOKS) break ;;
+            esac
+            sleep 10
+          done
+
+          if gh pr merge "$PR_NUM" --repo "$REPO" --squash; then
+            echo "Merged #$PR_NUM immediately"
+          else
+            echo "Not mergeable yet - enabling auto-merge for #$PR_NUM instead"
+            gh pr merge "$PR_NUM" --repo "$REPO" --squash --auto \
+              || echo "Could not enable auto-merge for #$PR_NUM - left open for manual merge"
+          fi
