@@ -12,3 +12,7 @@ tasks:
   - task_key: validate_smoke_test
     notebook: Hotfix_v1.py
     depends_on: [transform_smoke_test]
+
+  - task_key: verify_dynamic_pipeline
+    notebook: verify_dynamic_pipeline.py
+    depends_on: [validate_smoke_test]
