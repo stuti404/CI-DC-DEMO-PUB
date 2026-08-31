@@ -1,0 +1,14 @@
+job_key: dummy_cicd_smoke_test
+job_name: dummy-cicd-smoke-test
+
+tasks:
+  - task_key: ingest_smoke_test
+    notebook: smoke_test.py
+
+  - task_key: transform_smoke_test
+    notebook: smoke_v1.py
+    depends_on: [ingest_smoke_test]
+
+  - task_key: validate_smoke_test
+    notebook: Hotfix_v1.py
+    depends_on: [transform_smoke_test]
