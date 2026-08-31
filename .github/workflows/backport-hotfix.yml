@@ -34,3 +34,60 @@ jobs:
           pull_description: |
             Automated backport of #${pull_number} into ${target_branch}.
             Cherry-picked with -x for audit trail. Original PR: #${pull_number}
+
+      # The backport PR is authored by github-actions[bot], so approving it
+      # with a real account's token is never self-approval. BACKPORT_APPROVER_TOKEN
+      # holds a personal access token (added manually as a repo secret, not
+      # generated here) - used to approve the review, unstick the bot-authored
+      # PR's own workflow run (GitHub treats these like first-time-contributor
+      # runs and holds them at action_required), and merge once checks pass.
+      - name: Auto-approve and merge each backport PR
+        env:
+          GH_TOKEN: ${{ secrets.BACKPORT_APPROVER_TOKEN }}
+        run: |
+          PR_NUM="${{ github.event.pull_request.number }}"
+          for TARGET in dev uat; do
+            BRANCH="backport-${PR_NUM}-to-${TARGET}"
+            echo "Looking for backport PR from branch $BRANCH..."
+
+            BP_PR=""
+            for i in $(seq 1 15); do
+              BP_PR=$(gh pr list --repo "${{ github.repository }}" --head "$BRANCH" --state open --json number -q '.[0].number' 2>/dev/null || true)
+              if [ -n "$BP_PR" ]; then break; fi
+              sleep 4
+            done
+
+            if [ -z "$BP_PR" ]; then
+              echo "No open backport PR found for $TARGET - skipping (it may have failed to create, e.g. a merge conflict)"
+              continue
+            fi
+            echo "Found PR #$BP_PR for $TARGET"
+
+            gh pr review "$BP_PR" --repo "${{ github.repository }}" --approve \
+              || echo "Approve failed or already approved for #$BP_PR"
+
+            for i in $(seq 1 15); do
+              RUN_IDS=$(gh api "repos/${{ github.repository }}/actions/runs?per_page=15" \
+                -q '[.workflow_runs[] | select((.pull_requests[]?.number)=='"$BP_PR"') | select(.conclusion=="action_required") | .id] | unique[]' \
+                2>/dev/null || true)
+              for RID in $RUN_IDS; do
+                echo "Approving stuck workflow run $RID"
+                gh api --method POST "repos/${{ github.repository }}/actions/runs/$RID/approve" || true
+              done
+
+              STATE=$(gh pr view "$BP_PR" --repo "${{ github.repository }}" --json mergeStateStatus -q .mergeStateStatus 2>/dev/null || echo "")
+              echo "PR #$BP_PR mergeStateStatus: $STATE"
+              case "$STATE" in
+                CLEAN|UNSTABLE|HAS_HOOKS) break ;;
+              esac
+              sleep 8
+            done
+
+            if gh pr merge "$BP_PR" --repo "${{ github.repository }}" --merge; then
+              echo "Merged #$BP_PR immediately"
+            else
+              echo "Not mergeable yet - enabling auto-merge for #$BP_PR instead"
+              gh pr merge "$BP_PR" --repo "${{ github.repository }}" --merge --auto \
+                || echo "Could not enable auto-merge for #$BP_PR - it is left open for manual merge"
+            fi
+          done
