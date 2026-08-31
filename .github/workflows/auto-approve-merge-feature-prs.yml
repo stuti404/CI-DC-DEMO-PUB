@@ -20,6 +20,16 @@ jobs:
         run: |
           PR_NUM="${{ github.event.pull_request.number }}"
           REPO="${{ github.repository }}"
+          HEAD_REF="${{ github.event.pull_request.head.ref }}"
+
+          case "$HEAD_REF" in
+            feature/resolve-*|feature/sync-*)
+              MERGE_METHOD="merge"
+              ;;
+            *)
+              MERGE_METHOD="squash"
+              ;;
+          esac
 
           gh pr review "$PR_NUM" --repo "$REPO" --approve \
             || echo "Approve failed for #$PR_NUM (self-approval or already approved)"
@@ -33,10 +43,10 @@ jobs:
             sleep 10
           done
 
-          if gh pr merge "$PR_NUM" --repo "$REPO" --squash; then
-            echo "Merged #$PR_NUM immediately"
+          if gh pr merge "$PR_NUM" --repo "$REPO" --$MERGE_METHOD; then
+            echo "Merged #$PR_NUM immediately using $MERGE_METHOD"
           else
             echo "Not mergeable yet - enabling auto-merge for #$PR_NUM instead"
-            gh pr merge "$PR_NUM" --repo "$REPO" --squash --auto \
+            gh pr merge "$PR_NUM" --repo "$REPO" --$MERGE_METHOD --auto \
               || echo "Could not enable auto-merge for #$PR_NUM - left open for manual merge"
           fi
