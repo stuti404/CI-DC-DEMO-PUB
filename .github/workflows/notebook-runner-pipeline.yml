@@ -37,9 +37,6 @@ jobs:
       - name: Install Databricks CLI
         run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
 
-      # Regenerates PFL/resources/dummy_job.yml from PFL/notebook_pipeline.yml
-      # - keeps the committed file honest even if someone edited the
-      # manifest without re-running the generator locally.
       - name: Generate notebook pipeline job
         run: python PFL/scripts/generate_notebook_job.py
 

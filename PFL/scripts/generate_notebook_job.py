@@ -1,10 +1,3 @@
-"""Generate PFL/resources/dummy_job.yml from PFL/notebook_pipeline.yml.
-
-No notebook path or task graph is hand-written into the Databricks job
-resource - it's derived from the manifest every time, before validate/
-deploy. Adding a notebook to production means adding one manifest entry,
-not editing job YAML.
-"""
 import os
 import sys
 
@@ -25,17 +18,11 @@ TEMPLATE = """resources:
         pipeline: pfl-cicd-demo
         generated_by: generate_notebook_job.py
 
-      # Paused by default - flip pause_status to UNPAUSED once real data/
-      # logic replaces the smoke-test notebooks.
       schedule:
         quartz_cron_expression: "0 0 6 * * ?"
         timezone_id: "UTC"
         pause_status: PAUSED
 
-      # No job_clusters / new_cluster here on purpose: this workspace's
-      # token identity does not have "Allow cluster creation" permission.
-      # Omitting a cluster reference lets Databricks fall back to
-      # serverless compute, which needs no such permission.
       tasks:
 {tasks_yaml}
 """
