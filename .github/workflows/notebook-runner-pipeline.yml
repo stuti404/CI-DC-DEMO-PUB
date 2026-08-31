@@ -49,7 +49,10 @@ jobs:
 
       - name: Validate bundle
         env:
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_TOKEN: >-
+            ${{ steps.target.outputs.target == 'prod' && secrets.DATABRICKS_TOKEN_PROD
+             || steps.target.outputs.target == 'uat'  && secrets.DATABRICKS_TOKEN_UAT
+             || secrets.DATABRICKS_TOKEN_DEV }}
           DATABRICKS_HOST: >-
             ${{ steps.target.outputs.target == 'prod' && vars.DATABRICKS_HOST_PROD
              || steps.target.outputs.target == 'uat'  && vars.DATABRICKS_HOST_UAT
@@ -89,7 +92,7 @@ jobs:
 
       - name: Deploy bundle
         env:
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_DEV }}
           DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST_DEV }}
         run: databricks bundle deploy -t dev
 
@@ -163,7 +166,7 @@ jobs:
 
       - name: Deploy bundle
         env:
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_UAT }}
           DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST_UAT }}
         run: databricks bundle deploy -t uat
 
@@ -238,7 +241,7 @@ jobs:
 
       - name: Deploy bundle
         env:
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_PROD }}
           DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST_PROD }}
         run: databricks bundle deploy -t prod
 
@@ -320,7 +323,10 @@ jobs:
 
       - name: Run notebook job on Databricks
         env:
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_TOKEN: >-
+            ${{ env.TARGET == 'prod' && secrets.DATABRICKS_TOKEN_PROD
+             || env.TARGET == 'uat'  && secrets.DATABRICKS_TOKEN_UAT
+             || secrets.DATABRICKS_TOKEN_DEV }}
           DATABRICKS_HOST: >-
             ${{ env.TARGET == 'prod' && vars.DATABRICKS_HOST_PROD
              || env.TARGET == 'uat'  && vars.DATABRICKS_HOST_UAT
@@ -330,7 +336,10 @@ jobs:
       - name: Run hotfix job on Databricks (if generated)
         if: hashFiles('PFL/resources/hotfix_job.yml') != ''
         env:
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_TOKEN: >-
+            ${{ env.TARGET == 'prod' && secrets.DATABRICKS_TOKEN_PROD
+             || env.TARGET == 'uat'  && secrets.DATABRICKS_TOKEN_UAT
+             || secrets.DATABRICKS_TOKEN_DEV }}
           DATABRICKS_HOST: >-
             ${{ env.TARGET == 'prod' && vars.DATABRICKS_HOST_PROD
              || env.TARGET == 'uat'  && vars.DATABRICKS_HOST_UAT
