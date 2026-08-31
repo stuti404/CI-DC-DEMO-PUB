@@ -49,7 +49,10 @@ jobs:
 
       - name: Validate bundle
         env:
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_TOKEN: >-
+            ${{ steps.target.outputs.target == 'prod' && secrets.DATABRICKS_TOKEN_PROD
+             || steps.target.outputs.target == 'uat'  && secrets.DATABRICKS_TOKEN_UAT
+             || secrets.DATABRICKS_TOKEN_DEV }}
           DATABRICKS_HOST: >-
             ${{ steps.target.outputs.target == 'prod' && vars.DATABRICKS_HOST_PROD
              || steps.target.outputs.target == 'uat'  && vars.DATABRICKS_HOST_UAT
@@ -89,7 +92,7 @@ jobs:
 
       - name: Deploy bundle
         env:
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_DEV }}
           DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST_DEV }}
         run: databricks bundle deploy -t dev
 
@@ -135,8 +138,15 @@ jobs:
           role-to-assume: ${{ vars.ARTIFACT_PUBLISH_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
+      # Best-effort archival, not a deploy gate - a bucket/permissions issue
+      # here must not fail the job, since needs['publish-*'].result == 'success'
+      # is what gates the downstream execute job (including the real
+      # hotfix_job Databricks run). A failure this step can't recover from
+      # would silently block that run even though the actual bundle deploy
+      # above already succeeded.
       - name: Publish artifact (S3)
         if: vars.ARTIFACT_S3_BUCKET != ''
+        continue-on-error: true
         run: |
           aws s3 cp "dist/pfl-bundle-dev-${{ github.sha }}.zip" \
             "s3://${{ vars.ARTIFACT_S3_BUCKET }}/pfl/dev/"
@@ -163,7 +173,7 @@ jobs:
 
       - name: Deploy bundle
         env:
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_UAT }}
           DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST_UAT }}
         run: databricks bundle deploy -t uat
 
@@ -209,8 +219,15 @@ jobs:
           role-to-assume: ${{ vars.ARTIFACT_PUBLISH_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
+      # Best-effort archival, not a deploy gate - a bucket/permissions issue
+      # here must not fail the job, since needs['publish-*'].result == 'success'
+      # is what gates the downstream execute job (including the real
+      # hotfix_job Databricks run). A failure this step can't recover from
+      # would silently block that run even though the actual bundle deploy
+      # above already succeeded.
       - name: Publish artifact (S3)
         if: vars.ARTIFACT_S3_BUCKET != ''
+        continue-on-error: true
         run: |
           aws s3 cp "dist/pfl-bundle-uat-${{ github.sha }}.zip" \
             "s3://${{ vars.ARTIFACT_S3_BUCKET }}/pfl/uat/"
@@ -238,7 +255,7 @@ jobs:
 
       - name: Deploy bundle
         env:
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_PROD }}
           DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST_PROD }}
         run: databricks bundle deploy -t prod
 
@@ -284,8 +301,15 @@ jobs:
           role-to-assume: ${{ vars.ARTIFACT_PUBLISH_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
+      # Best-effort archival, not a deploy gate - a bucket/permissions issue
+      # here must not fail the job, since needs['publish-*'].result == 'success'
+      # is what gates the downstream execute job (including the real
+      # hotfix_job Databricks run). A failure this step can't recover from
+      # would silently block that run even though the actual bundle deploy
+      # above already succeeded.
       - name: Publish artifact (S3)
         if: vars.ARTIFACT_S3_BUCKET != ''
+        continue-on-error: true
         run: |
           aws s3 cp "dist/pfl-bundle-prod-${{ github.sha }}.zip" \
             "s3://${{ vars.ARTIFACT_S3_BUCKET }}/pfl/prod/"
@@ -320,7 +344,10 @@ jobs:
 
       - name: Run notebook job on Databricks
         env:
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_TOKEN: >-
+            ${{ env.TARGET == 'prod' && secrets.DATABRICKS_TOKEN_PROD
+             || env.TARGET == 'uat'  && secrets.DATABRICKS_TOKEN_UAT
+             || secrets.DATABRICKS_TOKEN_DEV }}
           DATABRICKS_HOST: >-
             ${{ env.TARGET == 'prod' && vars.DATABRICKS_HOST_PROD
              || env.TARGET == 'uat'  && vars.DATABRICKS_HOST_UAT
@@ -330,7 +357,10 @@ jobs:
       - name: Run hotfix job on Databricks (if generated)
         if: hashFiles('PFL/resources/hotfix_job.yml') != ''
         env:
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_TOKEN: >-
+            ${{ env.TARGET == 'prod' && secrets.DATABRICKS_TOKEN_PROD
+             || env.TARGET == 'uat'  && secrets.DATABRICKS_TOKEN_UAT
+             || secrets.DATABRICKS_TOKEN_DEV }}
           DATABRICKS_HOST: >-
             ${{ env.TARGET == 'prod' && vars.DATABRICKS_HOST_PROD
              || env.TARGET == 'uat'  && vars.DATABRICKS_HOST_UAT
