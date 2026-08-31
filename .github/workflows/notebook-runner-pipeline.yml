@@ -138,8 +138,15 @@ jobs:
           role-to-assume: ${{ vars.ARTIFACT_PUBLISH_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
+      # Best-effort archival, not a deploy gate - a bucket/permissions issue
+      # here must not fail the job, since needs['publish-*'].result == 'success'
+      # is what gates the downstream execute job (including the real
+      # hotfix_job Databricks run). A failure this step can't recover from
+      # would silently block that run even though the actual bundle deploy
+      # above already succeeded.
       - name: Publish artifact (S3)
         if: vars.ARTIFACT_S3_BUCKET != ''
+        continue-on-error: true
         run: |
           aws s3 cp "dist/pfl-bundle-dev-${{ github.sha }}.zip" \
             "s3://${{ vars.ARTIFACT_S3_BUCKET }}/pfl/dev/"
@@ -212,8 +219,15 @@ jobs:
           role-to-assume: ${{ vars.ARTIFACT_PUBLISH_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
+      # Best-effort archival, not a deploy gate - a bucket/permissions issue
+      # here must not fail the job, since needs['publish-*'].result == 'success'
+      # is what gates the downstream execute job (including the real
+      # hotfix_job Databricks run). A failure this step can't recover from
+      # would silently block that run even though the actual bundle deploy
+      # above already succeeded.
       - name: Publish artifact (S3)
         if: vars.ARTIFACT_S3_BUCKET != ''
+        continue-on-error: true
         run: |
           aws s3 cp "dist/pfl-bundle-uat-${{ github.sha }}.zip" \
             "s3://${{ vars.ARTIFACT_S3_BUCKET }}/pfl/uat/"
@@ -287,8 +301,15 @@ jobs:
           role-to-assume: ${{ vars.ARTIFACT_PUBLISH_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
+      # Best-effort archival, not a deploy gate - a bucket/permissions issue
+      # here must not fail the job, since needs['publish-*'].result == 'success'
+      # is what gates the downstream execute job (including the real
+      # hotfix_job Databricks run). A failure this step can't recover from
+      # would silently block that run even though the actual bundle deploy
+      # above already succeeded.
       - name: Publish artifact (S3)
         if: vars.ARTIFACT_S3_BUCKET != ''
+        continue-on-error: true
         run: |
           aws s3 cp "dist/pfl-bundle-prod-${{ github.sha }}.zip" \
             "s3://${{ vars.ARTIFACT_S3_BUCKET }}/pfl/prod/"
