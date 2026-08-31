@@ -31,14 +31,24 @@ jobs:
       - name: Install Databricks CLI
         run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
 
+      # Regenerates PFL/resources/hotfix_job.yml (untracked) from whichever
+      # new file this push added under PFL_EXECUTE/, if any - so validate
+      # actually checks the resource that publish-* will deploy, instead of
+      # validating a bundle that's silently missing it.
+      - name: Generate hotfix job resource (if any)
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: python PFL/scripts/generate_hotfix_resource.py
+
       - name: Validate bundle
         env:
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
-          DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST_DEV }}
-        run: databricks bundle validate -t dev
-
-      - name: Compile execute artefact
-        run: python -m py_compile PFL_EXECUTE/dummy_execute_script.py
+          DATABRICKS_HOST: >-
+            ${{ steps.target.outputs.target == 'prod' && vars.DATABRICKS_HOST_PROD
+             || steps.target.outputs.target == 'uat'  && vars.DATABRICKS_HOST_UAT
+             || vars.DATABRICKS_HOST_DEV }}
+        run: databricks bundle validate -t ${{ steps.target.outputs.target }}
 
   secret-scan:
     runs-on: ubuntu-latest
@@ -62,6 +72,12 @@ jobs:
 
       - name: Install Databricks CLI
         run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
+
+      - name: Generate hotfix job resource (if any)
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: python PFL/scripts/generate_hotfix_resource.py
 
       - name: Deploy bundle
         env:
@@ -129,6 +145,12 @@ jobs:
       - name: Install Databricks CLI
         run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
 
+      - name: Generate hotfix job resource (if any)
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: python PFL/scripts/generate_hotfix_resource.py
+
       - name: Deploy bundle
         env:
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
@@ -195,6 +217,12 @@ jobs:
 
       - name: Install Databricks CLI
         run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
+
+      - name: Generate hotfix job resource (if any)
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: python PFL/scripts/generate_hotfix_resource.py
 
       - name: Deploy bundle
         env:
@@ -266,6 +294,16 @@ jobs:
       - name: Install Databricks CLI
         run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
 
+      # Re-derives the same hotfix_job.yml the deploying publish-* job generated
+      # (untracked, so this fresh checkout doesn't have it on disk) - needed so
+      # `databricks bundle run hotfix_job` below resolves to the job that was
+      # actually deployed, rather than erroring on an unknown job key.
+      - name: Generate hotfix job resource (if any)
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+        run: python PFL/scripts/generate_hotfix_resource.py
+
       - name: Run notebook job on Databricks
         env:
           DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
@@ -275,7 +313,12 @@ jobs:
              || vars.DATABRICKS_HOST_DEV }}
         run: databricks bundle run dummy_cicd_smoke_test -t ${{ env.TARGET }}
 
-      - name: Run execute artefact
+      - name: Run hotfix job on Databricks (if generated)
+        if: hashFiles('PFL/resources/hotfix_job.yml') != ''
         env:
-          BUNDLE_TARGET: ${{ env.TARGET }}
-        run: python PFL_EXECUTE/dummy_execute_script.py
+          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+          DATABRICKS_HOST: >-
+            ${{ env.TARGET == 'prod' && vars.DATABRICKS_HOST_PROD
+             || env.TARGET == 'uat'  && vars.DATABRICKS_HOST_UAT
+             || vars.DATABRICKS_HOST_DEV }}
+        run: databricks bundle run hotfix_job -t ${{ env.TARGET }}
