@@ -1,12 +1,13 @@
 import os
+import re
 import sys
 
-import yaml
-
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-MANIFEST_PATH = os.path.join(REPO_ROOT, "PFL", "notebook_pipeline.yml")
 NOTEBOOKS_DIR = os.path.join(REPO_ROOT, "PFL", "notebooks")
 OUTPUT_PATH = os.path.join(REPO_ROOT, "PFL", "resources", "dummy_job.yml")
+
+JOB_KEY = "dummy_cicd_smoke_test"
+JOB_NAME = "dummy-cicd-smoke-test"
 
 TEMPLATE = """resources:
   jobs:
@@ -28,86 +29,72 @@ TEMPLATE = """resources:
 """
 
 TASK_TEMPLATE = """        - task_key: {task_key}
-{depends_on_yaml}          notebook_task:
+          notebook_task:
             notebook_path: ../notebooks/{notebook}
             base_parameters:
               environment: ${{bundle.target}}
 """
 
 
-def load_manifest():
-    with open(MANIFEST_PATH) as f:
-        manifest = yaml.safe_load(f)
-
-    if not manifest.get("job_key"):
-        sys.exit(f"{MANIFEST_PATH}: missing required 'job_key'")
-    if not manifest.get("tasks"):
-        sys.exit(f"{MANIFEST_PATH}: missing required 'tasks' (must be non-empty)")
-
-    return manifest
+def sanitize_task_key(filename):
+    name = os.path.splitext(filename)[0]
+    name = re.sub(r"[^A-Za-z0-9_]", "_", name)
+    if re.match(r"^\d", name):
+        name = f"t_{name}"
+    return name.lower()
 
 
-def validate(manifest):
-    task_keys = set()
-    for task in manifest["tasks"]:
-        for field in ("task_key", "notebook"):
-            if not task.get(field):
-                sys.exit(f"Task {task} is missing required field '{field}'")
-        if task["task_key"] in task_keys:
-            sys.exit(f"Duplicate task_key: {task['task_key']}")
-        task_keys.add(task["task_key"])
+def discover_notebooks():
+    entries = sorted(os.listdir(NOTEBOOKS_DIR))
+    notebooks = []
+    for f in entries:
+        if f.endswith(".py"):
+            notebooks.append(f)
+        elif f.endswith(".ipynb"):
+            print(f"SKIPPED (not a .py Databricks notebook): {f}")
+    return notebooks
 
-        notebook_path = os.path.join(NOTEBOOKS_DIR, task["notebook"])
-        if not os.path.isfile(notebook_path):
-            sys.exit(f"Task '{task['task_key']}' references notebook '{task['notebook']}', "
-                      f"which doesn't exist under PFL/notebooks/")
 
-    for task in manifest["tasks"]:
-        for dep in task.get("depends_on", []):
-            if dep not in task_keys:
-                sys.exit(f"Task '{task['task_key']}' depends_on unknown task_key '{dep}'")
-
-    referenced = {task["notebook"] for task in manifest["tasks"]}
-    on_disk = {f for f in os.listdir(NOTEBOOKS_DIR) if f.endswith(".py")}
-    unregistered = sorted(on_disk - referenced)
-    if unregistered:
-        print(f"WARNING: these .py notebooks exist under PFL/notebooks/ but aren't in "
-              f"{os.path.basename(MANIFEST_PATH)}, so they won't run: {unregistered}")
+def build_tasks(notebooks):
+    tasks = []
+    seen_keys = {}
+    for notebook in notebooks:
+        task_key = sanitize_task_key(notebook)
+        if task_key in seen_keys:
+            sys.exit(
+                f"Task key collision: '{notebook}' and '{seen_keys[task_key]}' "
+                f"both sanitize to '{task_key}'"
+            )
+        seen_keys[task_key] = notebook
+        tasks.append((task_key, notebook))
+    return tasks
 
 
 def render_tasks(tasks):
-    rendered = []
-    for task in tasks:
-        depends_on = task.get("depends_on", [])
-        if depends_on:
-            depends_yaml = "          depends_on:\n" + "".join(
-                f"            - task_key: {dep}\n" for dep in depends_on
-            )
-        else:
-            depends_yaml = ""
-        rendered.append(TASK_TEMPLATE.format(
-            task_key=task["task_key"],
-            depends_on_yaml=depends_yaml,
-            notebook=task["notebook"],
-        ))
-    return "\n".join(rendered)
+    return "\n".join(
+        TASK_TEMPLATE.format(task_key=task_key, notebook=notebook)
+        for task_key, notebook in tasks
+    )
 
 
 def main():
-    manifest = load_manifest()
-    validate(manifest)
+    notebooks = discover_notebooks()
+    if not notebooks:
+        sys.exit(f"No .py notebooks found under {NOTEBOOKS_DIR}")
+
+    tasks = build_tasks(notebooks)
 
     output = TEMPLATE.format(
-        job_key=manifest["job_key"],
-        job_name=manifest.get("job_name", manifest["job_key"]),
-        tasks_yaml=render_tasks(manifest["tasks"]),
+        job_key=JOB_KEY,
+        job_name=JOB_NAME,
+        tasks_yaml=render_tasks(tasks),
     )
 
     os.makedirs(os.path.dirname(OUTPUT_PATH), exist_ok=True)
     with open(OUTPUT_PATH, "w") as f:
         f.write(output)
 
-    print(f"Generated {OUTPUT_PATH} from {len(manifest['tasks'])} task(s) in {os.path.basename(MANIFEST_PATH)}")
+    print(f"Generated {OUTPUT_PATH} with {len(tasks)} task(s): {[t[0] for t in tasks]}")
 
 
 if __name__ == "__main__":
