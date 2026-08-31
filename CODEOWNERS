@@ -1,30 +1,6 @@
-# CODEOWNERS
-# ---------------------------------------------------------------------------
-# Real-org extension pattern (not active in this 2-account demo environment):
-# once further reviewers exist, hand /PFL/notebooks/ (day-to-day
-# notebook code) to them directly - it's already split out below so this
-# requires no restructuring, just changing the owner on one line.
-# Prod-affecting paths (bundle target config, job resources, pipeline
-# definitions) stay with a stricter/senior owner even after that split.
-#
-# Example with real teams in a larger org:
-#   /databricks.yml         @org/prod-approvers
-#   /PFL/resources/          @org/prod-approvers
-#   /PFL/notebooks/           @org/qa-approvers
-#   /.github/                 @org/platform-team
-# ---------------------------------------------------------------------------
-
-# Live demo state: 2 real accounts (stuti404, Stuti-Ganit), both listed as
-# owners on every path. GitHub still structurally forbids self-approval, so
-# whichever account authored a given PR can never satisfy this requirement
-# with their own approval - the OTHER listed account always has to review it.
-# This is why both names are listed everywhere rather than splitting paths
-# between them: Stuti-Ganit authors most dev/uat PRs (stuti404 approves
-# those), while stuti404 authors most promotion/admin PRs (Stuti-Ganit
-# approves those) - listing both keeps either direction covered without
-# ever silently reducing to a single approver. Matches the same two-account
-# reviewer list already used on the production GitHub Environment's
-# required-reviewer gate on publish-prod.
+# Both accounts are listed on every path because GitHub blocks self-approval
+# outright - whoever opens a PR can never clear the code-owner requirement
+# on it, so the other account always has to review.
 
 /databricks.yml       @stuti404 @Stuti-Ganit
 /PFL/resources/       @stuti404 @Stuti-Ganit
