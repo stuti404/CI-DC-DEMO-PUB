@@ -84,6 +84,17 @@ jobs:
           echo "new_file=$NEW_FILE" >> "$GITHUB_OUTPUT"
           echo "Single new file: $NEW_FILE"
 
+          # The pipeline wires this file into a real Databricks notebook_task
+          # (see PFL/scripts/generate_hotfix_resource.py) - it has to actually
+          # be a Databricks notebook, not an arbitrary script, or deploy fails
+          # on a valid-looking PR that then breaks at merge time.
+          FIRST_LINE=$(git show "$HEAD_SHA:$NEW_FILE" | head -n1)
+          if [ "$FIRST_LINE" != "# Databricks notebook source" ]; then
+            echo "reason=not_notebook" >> "$GITHUB_OUTPUT"
+            echo "$NEW_FILE must be a Databricks notebook (first line '# Databricks notebook source'). Found: '$FIRST_LINE'"
+            exit 1
+          fi
+
           # A hotfix must ONLY add that one new file - it must not also modify,
           # rename, or delete any other file under PFL_EXECUTE/. The earlier
           # ADDED_FILES check only counted additions, so a PR that added one
@@ -122,6 +133,8 @@ jobs:
             BODY="Closing automatically: \`$NEW_FILE\` already exists on \`main\`. This already exists - a hotfix must add exactly one *new*, uniquely-named file under \`PFL_EXECUTE/\`. Rename the file, or check whether this hotfix has already been applied."
           elif [ "$REASON" = "extra" ]; then
             BODY="Closing automatically: this hotfix adds a new PFL_EXECUTE/ file but also touches other file(s) in that folder. A hotfix PR into \`main\` may ONLY add its one new file under \`PFL_EXECUTE/\` - no other file in that folder may be modified, renamed, or deleted in the same PR."
+          elif [ "$REASON" = "not_notebook" ]; then
+            BODY="Closing automatically: \`$NEW_FILE\` doesn't start with \`# Databricks notebook source\`. The pipeline deploys this file as a real Databricks job (see \`PFL/scripts/generate_hotfix_resource.py\`), so it must be a valid Databricks notebook, not a plain script."
           else
             BODY="Closing automatically: a hotfix PR into \`main\` must add exactly one new file under \`PFL_EXECUTE/\` (not zero, not more than one, and not just a modification to an existing file)."
           fi
