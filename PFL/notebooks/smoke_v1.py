@@ -6,8 +6,8 @@ env = dbutils.widgets.get("environment")
 
 print(f"Running smoke test in '{env}'")
 
-result = 1 + 23
-assert result == 24
+result = 1 + 22
+assert result == 23
 temp = 10
 print(temp*3)
 second_check = 2 * 5
