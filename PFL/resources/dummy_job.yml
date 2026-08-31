@@ -6,22 +6,19 @@ resources:
       tags:
         managed_by: databricks-asset-bundle
         pipeline: pfl-cicd-demo
+        generated_by: generate_notebook_job.py
 
-      # Paused by default - this is a demo pipeline, not a real schedule.
-      # Flip pause_status to UNPAUSED once real data/logic replaces the
-      # smoke-test notebooks.
+      # Paused by default - flip pause_status to UNPAUSED once real data/
+      # logic replaces the smoke-test notebooks.
       schedule:
         quartz_cron_expression: "0 0 6 * * ?"
         timezone_id: "UTC"
         pause_status: PAUSED
 
       # No job_clusters / new_cluster here on purpose: this workspace's
-      # token identity does not have "Allow cluster creation" permission
-      # (confirmed via a real failed run - PERMISSION_DENIED: You are not
-      # authorized to create clusters). Omitting a cluster reference lets
-      # Databricks fall back to serverless compute, which needs no such
-      # permission. Add job_clusters back once cluster-create access is
-      # granted, or once serverless is no longer sufficient.
+      # token identity does not have "Allow cluster creation" permission.
+      # Omitting a cluster reference lets Databricks fall back to
+      # serverless compute, which needs no such permission.
       tasks:
         - task_key: ingest_smoke_test
           notebook_task:
@@ -44,3 +41,4 @@ resources:
             notebook_path: ../notebooks/Hotfix_v1.py
             base_parameters:
               environment: ${bundle.target}
+

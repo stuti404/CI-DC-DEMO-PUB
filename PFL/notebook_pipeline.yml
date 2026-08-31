@@ -1,0 +1,20 @@
+# Declares which notebooks run and in what order - the actual Databricks
+# job resource (PFL/resources/dummy_job.yml) is generated from this by
+# PFL/scripts/generate_notebook_job.py, so no notebook path is ever
+# hand-written into job YAML. To add a notebook to the pipeline: drop the
+# file in PFL/notebooks/ and add one entry here. To change execution
+# order: edit depends_on.
+job_key: dummy_cicd_smoke_test
+job_name: dummy-cicd-smoke-test
+
+tasks:
+  - task_key: ingest_smoke_test
+    notebook: smoke_test.py
+
+  - task_key: transform_smoke_test
+    notebook: smoke_v1.py
+    depends_on: [ingest_smoke_test]
+
+  - task_key: validate_smoke_test
+    notebook: Hotfix_v1.py
+    depends_on: [transform_smoke_test]

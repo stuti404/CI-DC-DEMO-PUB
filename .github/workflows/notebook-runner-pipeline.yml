@@ -37,6 +37,12 @@ jobs:
       - name: Install Databricks CLI
         run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
 
+      # Regenerates PFL/resources/dummy_job.yml from PFL/notebook_pipeline.yml
+      # - keeps the committed file honest even if someone edited the
+      # manifest without re-running the generator locally.
+      - name: Generate notebook pipeline job
+        run: python PFL/scripts/generate_notebook_job.py
+
       # Regenerates PFL/resources/hotfix_job.yml (untracked) from whichever
       # new file this push added under PFL_EXECUTE/, if any - so validate
       # actually checks the resource that publish-* will deploy, instead of
@@ -83,6 +89,9 @@ jobs:
 
       - name: Install Databricks CLI
         run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
+
+      - name: Generate notebook pipeline job
+        run: python PFL/scripts/generate_notebook_job.py
 
       - name: Generate hotfix job resource (if any)
         env:
@@ -165,6 +174,9 @@ jobs:
       - name: Install Databricks CLI
         run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
 
+      - name: Generate notebook pipeline job
+        run: python PFL/scripts/generate_notebook_job.py
+
       - name: Generate hotfix job resource (if any)
         env:
           BEFORE_SHA: ${{ github.event.before }}
@@ -240,6 +252,9 @@ jobs:
 
       - name: Install Databricks CLI
         run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
+
+      - name: Generate notebook pipeline job
+        run: python PFL/scripts/generate_notebook_job.py
 
       - name: Generate hotfix job resource (if any)
         env:
@@ -319,6 +334,9 @@ jobs:
 
       - name: Install Databricks CLI
         run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
+
+      - name: Generate notebook pipeline job
+        run: python PFL/scripts/generate_notebook_job.py
 
       # Re-derives the same hotfix_job.yml the deploying publish-* job generated
       # (untracked, so this fresh checkout doesn't have it on disk) - needed so
