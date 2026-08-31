@@ -1,15 +1,5 @@
-"""Generate PFL/resources/hotfix_job.yml for whichever new file a hotfix added
-under PFL_EXECUTE/, so it deploys and runs as a real Databricks job instead of
-sitting inert. Not committed to git - the deploying CI job runs this right
-before `databricks bundle deploy`, and bundle deploy reads the local working
-tree, not just tracked files.
-
-Uses the same before/after SHA range the pipeline's own artifact-packaging
-step already diffs against (github.event.before / github.sha on a push
-event), so this doesn't need to guess a commit ancestor across the
-hotfix -> backport -> promotion chain.
-"""
 import os
+import re
 import subprocess
 import sys
 
@@ -27,7 +17,10 @@ TEMPLATE = """resources:
         generated_by: generate_hotfix_resource.py
 
       tasks:
-        - task_key: run_hotfix_file
+{tasks_yaml}
+"""
+
+TASK_TEMPLATE = """        - task_key: {task_key}
           notebook_task:
             notebook_path: ../../PFL_EXECUTE/{filename}
             base_parameters:
@@ -35,47 +28,74 @@ TEMPLATE = """resources:
 """
 
 
-def find_new_pfl_execute_file(before_sha, after_sha):
+def sanitize_task_key(filename):
+    name = os.path.splitext(filename)[0]
+    name = re.sub(r"[^A-Za-z0-9_]", "_", name)
+    if re.match(r"^\d", name):
+        name = f"t_{name}"
+    return name.lower()
+
+
+def find_changed_pfl_execute_files(before_sha, after_sha):
     if not before_sha or set(before_sha) == {"0"}:
         print("No usable 'before' SHA (first push on branch, or force-push) - skipping hotfix job generation.")
-        return None
+        return []
 
     try:
         diff = subprocess.run(
-            ["git", "diff", "--name-only", "--diff-filter=A", before_sha, after_sha, "--", "PFL_EXECUTE/"],
+            ["git", "diff", "--name-only", "--diff-filter=AM", before_sha, after_sha, "--", "PFL_EXECUTE/"],
             cwd=REPO_ROOT, capture_output=True, text=True, check=True,
         )
     except subprocess.CalledProcessError as e:
         print(f"git diff failed ({e}) - skipping hotfix job generation.")
-        return None
+        return []
 
-    added = [f for f in diff.stdout.splitlines() if f.strip().endswith(".py")]
+    changed = [os.path.basename(f) for f in diff.stdout.splitlines() if f.strip().endswith(".py")]
 
-    if not added:
-        print("No new PFL_EXECUTE/*.py file in this push - nothing to generate.")
-        return None
-    if len(added) > 1:
-        print(f"Expected at most one new PFL_EXECUTE file, found {len(added)}: {added} - skipping generation.")
-        return None
+    if not changed:
+        print("No added/modified PFL_EXECUTE/*.py file in this push - nothing to generate.")
+    return changed
 
-    return os.path.basename(added[0])
+
+def build_tasks(filenames):
+    tasks = []
+    seen_keys = {}
+    for filename in filenames:
+        task_key = sanitize_task_key(filename)
+        if task_key in seen_keys:
+            sys.exit(
+                f"Task key collision: '{filename}' and '{seen_keys[task_key]}' "
+                f"both sanitize to '{task_key}'"
+            )
+        seen_keys[task_key] = filename
+        tasks.append((task_key, filename))
+    return tasks
+
+
+def render_tasks(tasks):
+    return "\n".join(
+        TASK_TEMPLATE.format(task_key=task_key, filename=filename)
+        for task_key, filename in tasks
+    )
 
 
 def main():
     before_sha = os.environ.get("BEFORE_SHA", "")
     after_sha = os.environ.get("AFTER_SHA", "")
 
-    filename = find_new_pfl_execute_file(before_sha, after_sha)
-    if filename is None:
+    filenames = find_changed_pfl_execute_files(before_sha, after_sha)
+    if not filenames:
         if os.path.exists(RESOURCE_PATH):
             os.remove(RESOURCE_PATH)
         return
 
+    tasks = build_tasks(filenames)
+
     os.makedirs(os.path.dirname(RESOURCE_PATH), exist_ok=True)
     with open(RESOURCE_PATH, "w") as f:
-        f.write(TEMPLATE.format(filename=filename))
+        f.write(TEMPLATE.format(tasks_yaml=render_tasks(tasks)))
 
-    print(f"Generated {RESOURCE_PATH} -> notebook_path ../../PFL_EXECUTE/{filename}")
+    print(f"Generated {RESOURCE_PATH} with {len(tasks)} task(s): {[t[0] for t in tasks]}")
 
 
 if __name__ == "__main__":
