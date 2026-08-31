@@ -8,7 +8,7 @@ def main():
     run_id = os.environ.get("CODEBUILD_BUILD_ID", "local")
     print(f"Executing against '{target}' (run {run_id})")
      print(f"Executing against '{target}'")
-      print(f"Executing against (run {run_id})")
+      print(f"This is to test flow from dev to uat")
 
     checks_passed = True
     if not checks_passed:
