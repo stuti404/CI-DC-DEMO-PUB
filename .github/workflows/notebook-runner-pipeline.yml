@@ -17,10 +17,6 @@ jobs:
   validate:
     runs-on: codebuild-pfl-databricks-runner-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      # fetch-depth: 0 - generate_hotfix_resource.py diffs github.event.before
-      # against github.sha; a shallow (default) checkout doesn't have the
-      # "before" commit object, so that diff fails and the step silently
-      # no-ops on every run without this.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -40,10 +36,6 @@ jobs:
       - name: Generate notebook pipeline job
         run: python PFL/scripts/generate_notebook_job.py
 
-      # Regenerates PFL/resources/hotfix_job.yml (untracked) from whichever
-      # new file this push added under PFL_EXECUTE/, if any - so validate
-      # actually checks the resource that publish-* will deploy, instead of
-      # validating a bundle that's silently missing it.
       - name: Generate hotfix job resource (if any)
         env:
           BEFORE_SHA: ${{ github.event.before }}
@@ -144,12 +136,6 @@ jobs:
           role-to-assume: ${{ vars.ARTIFACT_PUBLISH_ROLE_ARN }}
           aws-region: ${{ vars.AWS_REGION }}
 
-      # Best-effort archival, not a deploy gate - a bucket/permissions issue
-      # here must not fail the job, since needs['publish-*'].result == 'success'
-      # is what gates the downstream execute job (including the real
-      # hotfix_job Databricks run). A failure this step can't recover from
-      # would silently block that run even though the actual bundle deploy
-      # above already succeeded.
       - name: Publish artifact (S3)
         if: vars.ARTIFACT_S3_BUCKET != ''
         continue-on-error: true
@@ -335,10 +321,6 @@ jobs:
       - name: Generate notebook pipeline job
         run: python PFL/scripts/generate_notebook_job.py
 
-      # Re-derives the same hotfix_job.yml the deploying publish-* job generated
-      # (untracked, so this fresh checkout doesn't have it on disk) - needed so
-      # `databricks bundle run hotfix_job` below resolves to the job that was
-      # actually deployed, rather than erroring on an unknown job key.
       - name: Generate hotfix job resource (if any)
         env:
           BEFORE_SHA: ${{ github.event.before }}
