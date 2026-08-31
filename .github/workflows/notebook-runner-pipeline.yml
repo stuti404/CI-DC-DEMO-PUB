@@ -17,7 +17,13 @@ jobs:
   validate:
     runs-on: codebuild-pfl-databricks-runner-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
+      # fetch-depth: 0 - generate_hotfix_resource.py diffs github.event.before
+      # against github.sha; a shallow (default) checkout doesn't have the
+      # "before" commit object, so that diff fails and the step silently
+      # no-ops on every run without this.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Resolve bundle target from branch
         id: target
@@ -69,6 +75,8 @@ jobs:
       target: dev
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Databricks CLI
         run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
@@ -141,6 +149,8 @@ jobs:
       target: uat
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Databricks CLI
         run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
@@ -214,6 +224,8 @@ jobs:
       target: prod
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Databricks CLI
         run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
@@ -290,6 +302,8 @@ jobs:
       TARGET: ${{ needs['publish-prod'].outputs.target || needs['publish-uat'].outputs.target || needs['publish-dev'].outputs.target }}
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Install Databricks CLI
         run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
