@@ -21,7 +21,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Resolve bundle target from branch
+      - name: Resolve environment from branch
         id: target
         run: |
           case "${GITHUB_REF##*/}" in
@@ -30,36 +30,59 @@ jobs:
             *)    echo "target=dev"  >> "$GITHUB_OUTPUT" ;;
           esac
 
-      - name: Install Databricks CLI
-        run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
-
-      - name: Generate notebook pipeline job
-        run: python PFL/scripts/generate_notebook_job.py
-
-      - name: Generate hotfix job resource (if any)
+      - name: Generate notebook job spec
         env:
           BEFORE_SHA: ${{ github.event.before }}
           AFTER_SHA: ${{ github.sha }}
-        run: python PFL/scripts/generate_hotfix_resource.py
+          ENVIRONMENT: ${{ steps.target.outputs.target }}
+          BRANCH_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: python PFL/scripts/generate_notebook_job.py
+        working-directory: PFL/scripts
 
-      - name: Validate bundle
+      - name: Generate hotfix job spec (if any)
         env:
-          DATABRICKS_TOKEN: >-
-            ${{ steps.target.outputs.target == 'prod' && secrets.DATABRICKS_TOKEN_PROD
-             || steps.target.outputs.target == 'uat'  && secrets.DATABRICKS_TOKEN_UAT
-             || secrets.DATABRICKS_TOKEN_DEV }}
-          DATABRICKS_HOST: >-
-            ${{ steps.target.outputs.target == 'prod' && vars.DATABRICKS_HOST_PROD
-             || steps.target.outputs.target == 'uat'  && vars.DATABRICKS_HOST_UAT
-             || vars.DATABRICKS_HOST_DEV }}
-        run: databricks bundle validate -t ${{ steps.target.outputs.target }}
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+          ENVIRONMENT: ${{ steps.target.outputs.target }}
+          BRANCH_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: python PFL/scripts/generate_hotfix_resource.py
+        working-directory: PFL/scripts
+
+      - name: Validate notebook headers and job specs
+        run: |
+          check_header() {
+            local subdir="$1"
+            local manifest="$2"
+            [ -f "$manifest" ] || return 0
+            while IFS= read -r file; do
+              [ -n "$file" ] || continue
+              FIRST_LINE=$(head -n1 "$subdir/$file")
+              if [ "$FIRST_LINE" != "# Databricks notebook source" ]; then
+                echo "FAIL: $subdir/$file does not start with '# Databricks notebook source'"
+                exit 1
+              fi
+              python -m py_compile "$subdir/$file"
+            done < "$manifest"
+          }
+
+          check_header "PFL/notebooks" "PFL/generated/notebook_files.txt"
+          check_header "PFL_EXECUTE" "PFL/generated/hotfix_files.txt"
+
+          for spec in PFL/generated/notebook_job.json PFL/generated/hotfix_job.json; do
+            [ -f "$spec" ] || continue
+            python PFL/scripts/validate_job_spec.py "$spec"
+          done
 
   secret-scan:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # full history — catch secrets introduced then "fixed" in a later commit on the same PR
+          fetch-depth: 0
       - name: Gitleaks scan
         uses: gitleaks/gitleaks-action@v2
         env:
@@ -71,6 +94,9 @@ jobs:
     runs-on: codebuild-pfl-databricks-runner-${{ github.run_id }}-${{ github.run_attempt }}
     outputs:
       target: dev
+    env:
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_DEV }}
+      DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST_DEV }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -79,53 +105,65 @@ jobs:
       - name: Install Databricks CLI
         run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
 
-      - name: Generate notebook pipeline job
-        run: python PFL/scripts/generate_notebook_job.py
-
-      - name: Generate hotfix job resource (if any)
+      - name: Generate notebook job spec
         env:
           BEFORE_SHA: ${{ github.event.before }}
           AFTER_SHA: ${{ github.sha }}
-        run: python PFL/scripts/generate_hotfix_resource.py
+          ENVIRONMENT: dev
+          BRANCH_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: python PFL/scripts/generate_notebook_job.py
+        working-directory: PFL/scripts
 
-      - name: Deploy bundle
+      - name: Generate hotfix job spec (if any)
         env:
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_DEV }}
-          DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST_DEV }}
-        run: databricks bundle deploy -t dev
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+          ENVIRONMENT: dev
+          BRANCH_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: python PFL/scripts/generate_hotfix_resource.py
+        working-directory: PFL/scripts
 
-      - name: Package bundle as build artifact
+      - name: Import changed files to workspace
         run: |
-          mkdir -p dist incremental_bundle
+          WORKSPACE_ROOT="/Users/stuti@ganitinc.com/pfl-cicd/dev"
+          databricks workspace mkdirs "$WORKSPACE_ROOT/notebooks"
+          databricks workspace mkdirs "$WORKSPACE_ROOT/PFL_EXECUTE"
+          for f in $(cat PFL/generated/notebook_files.txt 2>/dev/null); do
+            databricks workspace import "$WORKSPACE_ROOT/notebooks/$f" --file "PFL/notebooks/$f" --language PYTHON --format SOURCE --overwrite
+          done
+          for f in $(cat PFL/generated/hotfix_files.txt 2>/dev/null); do
+            databricks workspace import "$WORKSPACE_ROOT/PFL_EXECUTE/$f" --file "PFL_EXECUTE/$f" --language PYTHON --format SOURCE --overwrite
+          done
 
+      - name: Package changed files as build artifact
+        run: |
+          mkdir -p dist incremental_changes
           git fetch --no-tags --unshallow 2>/dev/null || true
-
           git diff --name-only --diff-filter=ACMR \
             "${{ github.event.before }}" "${{ github.sha }}" \
-            -- PFL/ PFL_EXECUTE/ databricks.yml > changed_files.txt
-
+            -- PFL/ PFL_EXECUTE/ > changed_files.txt
           echo "Changed files:"
           cat changed_files.txt
-
           while IFS= read -r file; do
             if [ -n "$file" ] && [ -f "$file" ]; then
-              mkdir -p "incremental_bundle/$(dirname "$file")"
-              cp -- "$file" "incremental_bundle/$file"
+              mkdir -p "incremental_changes/$(dirname "$file")"
+              cp -- "$file" "incremental_changes/$file"
             fi
           done < changed_files.txt
-
-          if [ -z "$(find incremental_bundle -type f)" ]; then
-            echo "No PFL/, PFL_EXECUTE/, or databricks.yml changes in this push." > incremental_bundle/NO_CHANGES.txt
+          if [ -z "$(find incremental_changes -type f)" ]; then
+            echo "No PFL/ or PFL_EXECUTE/ changes in this push." > incremental_changes/NO_CHANGES.txt
           fi
-
-          cd incremental_bundle
-
-          zip -r "../dist/pfl-bundle-dev-${{ github.sha }}.zip" .
+          cd incremental_changes
+          zip -r "../dist/pfl-changed-files-dev-${{ github.sha }}.zip" .
 
       - name: Publish artifact (GitHub Actions)
         uses: actions/upload-artifact@v4
         with:
-          name: pfl-bundle-dev-${{ github.sha }}
+          name: pfl-changed-files-dev-${{ github.sha }}
           path: dist/*.zip
           retention-days: 30
 
@@ -140,7 +178,7 @@ jobs:
         if: vars.ARTIFACT_S3_BUCKET != ''
         continue-on-error: true
         run: |
-          aws s3 cp "dist/pfl-bundle-dev-${{ github.sha }}.zip" \
+          aws s3 cp "dist/pfl-changed-files-dev-${{ github.sha }}.zip" \
             "s3://${{ vars.ARTIFACT_S3_BUCKET }}/pfl/dev/"
 
   publish-uat:
@@ -149,6 +187,9 @@ jobs:
     runs-on: codebuild-pfl-databricks-runner-${{ github.run_id }}-${{ github.run_attempt }}
     outputs:
       target: uat
+    env:
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_UAT }}
+      DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST_UAT }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -157,53 +198,65 @@ jobs:
       - name: Install Databricks CLI
         run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
 
-      - name: Generate notebook pipeline job
-        run: python PFL/scripts/generate_notebook_job.py
-
-      - name: Generate hotfix job resource (if any)
+      - name: Generate notebook job spec
         env:
           BEFORE_SHA: ${{ github.event.before }}
           AFTER_SHA: ${{ github.sha }}
-        run: python PFL/scripts/generate_hotfix_resource.py
+          ENVIRONMENT: uat
+          BRANCH_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: python PFL/scripts/generate_notebook_job.py
+        working-directory: PFL/scripts
 
-      - name: Deploy bundle
+      - name: Generate hotfix job spec (if any)
         env:
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_UAT }}
-          DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST_UAT }}
-        run: databricks bundle deploy -t uat
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+          ENVIRONMENT: uat
+          BRANCH_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: python PFL/scripts/generate_hotfix_resource.py
+        working-directory: PFL/scripts
 
-      - name: Package bundle as build artifact
+      - name: Import changed files to workspace
         run: |
-          mkdir -p dist incremental_bundle
+          WORKSPACE_ROOT="/Users/stuti@ganitinc.com/pfl-cicd/uat"
+          databricks workspace mkdirs "$WORKSPACE_ROOT/notebooks"
+          databricks workspace mkdirs "$WORKSPACE_ROOT/PFL_EXECUTE"
+          for f in $(cat PFL/generated/notebook_files.txt 2>/dev/null); do
+            databricks workspace import "$WORKSPACE_ROOT/notebooks/$f" --file "PFL/notebooks/$f" --language PYTHON --format SOURCE --overwrite
+          done
+          for f in $(cat PFL/generated/hotfix_files.txt 2>/dev/null); do
+            databricks workspace import "$WORKSPACE_ROOT/PFL_EXECUTE/$f" --file "PFL_EXECUTE/$f" --language PYTHON --format SOURCE --overwrite
+          done
 
+      - name: Package changed files as build artifact
+        run: |
+          mkdir -p dist incremental_changes
           git fetch --no-tags --unshallow 2>/dev/null || true
-
           git diff --name-only --diff-filter=ACMR \
             "${{ github.event.before }}" "${{ github.sha }}" \
-            -- PFL/ PFL_EXECUTE/ databricks.yml > changed_files.txt
-
+            -- PFL/ PFL_EXECUTE/ > changed_files.txt
           echo "Changed files:"
           cat changed_files.txt
-
           while IFS= read -r file; do
             if [ -n "$file" ] && [ -f "$file" ]; then
-              mkdir -p "incremental_bundle/$(dirname "$file")"
-              cp -- "$file" "incremental_bundle/$file"
+              mkdir -p "incremental_changes/$(dirname "$file")"
+              cp -- "$file" "incremental_changes/$file"
             fi
           done < changed_files.txt
-
-          if [ -z "$(find incremental_bundle -type f)" ]; then
-            echo "No PFL/, PFL_EXECUTE/, or databricks.yml changes in this push." > incremental_bundle/NO_CHANGES.txt
+          if [ -z "$(find incremental_changes -type f)" ]; then
+            echo "No PFL/ or PFL_EXECUTE/ changes in this push." > incremental_changes/NO_CHANGES.txt
           fi
-
-          cd incremental_bundle
-
-          zip -r "../dist/pfl-bundle-uat-${{ github.sha }}.zip" .
+          cd incremental_changes
+          zip -r "../dist/pfl-changed-files-uat-${{ github.sha }}.zip" .
 
       - name: Publish artifact (GitHub Actions)
         uses: actions/upload-artifact@v4
         with:
-          name: pfl-bundle-uat-${{ github.sha }}
+          name: pfl-changed-files-uat-${{ github.sha }}
           path: dist/*.zip
           retention-days: 30
 
@@ -218,7 +271,7 @@ jobs:
         if: vars.ARTIFACT_S3_BUCKET != ''
         continue-on-error: true
         run: |
-          aws s3 cp "dist/pfl-bundle-uat-${{ github.sha }}.zip" \
+          aws s3 cp "dist/pfl-changed-files-uat-${{ github.sha }}.zip" \
             "s3://${{ vars.ARTIFACT_S3_BUCKET }}/pfl/uat/"
 
   publish-prod:
@@ -228,6 +281,9 @@ jobs:
     environment: production
     outputs:
       target: prod
+    env:
+      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_PROD }}
+      DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST_PROD }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -236,53 +292,65 @@ jobs:
       - name: Install Databricks CLI
         run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
 
-      - name: Generate notebook pipeline job
-        run: python PFL/scripts/generate_notebook_job.py
-
-      - name: Generate hotfix job resource (if any)
+      - name: Generate notebook job spec
         env:
           BEFORE_SHA: ${{ github.event.before }}
           AFTER_SHA: ${{ github.sha }}
-        run: python PFL/scripts/generate_hotfix_resource.py
+          ENVIRONMENT: prod
+          BRANCH_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: python PFL/scripts/generate_notebook_job.py
+        working-directory: PFL/scripts
 
-      - name: Deploy bundle
+      - name: Generate hotfix job spec (if any)
         env:
-          DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_PROD }}
-          DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST_PROD }}
-        run: databricks bundle deploy -t prod
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+          ENVIRONMENT: prod
+          BRANCH_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: python PFL/scripts/generate_hotfix_resource.py
+        working-directory: PFL/scripts
 
-      - name: Package bundle as build artifact
+      - name: Import changed files to workspace
         run: |
-          mkdir -p dist incremental_bundle
+          WORKSPACE_ROOT="/Users/stuti@ganitinc.com/pfl-cicd/prod"
+          databricks workspace mkdirs "$WORKSPACE_ROOT/notebooks"
+          databricks workspace mkdirs "$WORKSPACE_ROOT/PFL_EXECUTE"
+          for f in $(cat PFL/generated/notebook_files.txt 2>/dev/null); do
+            databricks workspace import "$WORKSPACE_ROOT/notebooks/$f" --file "PFL/notebooks/$f" --language PYTHON --format SOURCE --overwrite
+          done
+          for f in $(cat PFL/generated/hotfix_files.txt 2>/dev/null); do
+            databricks workspace import "$WORKSPACE_ROOT/PFL_EXECUTE/$f" --file "PFL_EXECUTE/$f" --language PYTHON --format SOURCE --overwrite
+          done
 
+      - name: Package changed files as build artifact
+        run: |
+          mkdir -p dist incremental_changes
           git fetch --no-tags --unshallow 2>/dev/null || true
-
           git diff --name-only --diff-filter=ACMR \
             "${{ github.event.before }}" "${{ github.sha }}" \
-            -- PFL/ PFL_EXECUTE/ databricks.yml > changed_files.txt
-
+            -- PFL/ PFL_EXECUTE/ > changed_files.txt
           echo "Changed files:"
           cat changed_files.txt
-
           while IFS= read -r file; do
             if [ -n "$file" ] && [ -f "$file" ]; then
-              mkdir -p "incremental_bundle/$(dirname "$file")"
-              cp -- "$file" "incremental_bundle/$file"
+              mkdir -p "incremental_changes/$(dirname "$file")"
+              cp -- "$file" "incremental_changes/$file"
             fi
           done < changed_files.txt
-
-          if [ -z "$(find incremental_bundle -type f)" ]; then
-            echo "No PFL/, PFL_EXECUTE/, or databricks.yml changes in this push." > incremental_bundle/NO_CHANGES.txt
+          if [ -z "$(find incremental_changes -type f)" ]; then
+            echo "No PFL/ or PFL_EXECUTE/ changes in this push." > incremental_changes/NO_CHANGES.txt
           fi
-
-          cd incremental_bundle
-
-          zip -r "../dist/pfl-bundle-prod-${{ github.sha }}.zip" .
+          cd incremental_changes
+          zip -r "../dist/pfl-changed-files-prod-${{ github.sha }}.zip" .
 
       - name: Publish artifact (GitHub Actions)
         uses: actions/upload-artifact@v4
         with:
-          name: pfl-bundle-prod-${{ github.sha }}
+          name: pfl-changed-files-prod-${{ github.sha }}
           path: dist/*.zip
           retention-days: 30
 
@@ -297,7 +365,7 @@ jobs:
         if: vars.ARTIFACT_S3_BUCKET != ''
         continue-on-error: true
         run: |
-          aws s3 cp "dist/pfl-bundle-prod-${{ github.sha }}.zip" \
+          aws s3 cp "dist/pfl-changed-files-prod-${{ github.sha }}.zip" \
             "s3://${{ vars.ARTIFACT_S3_BUCKET }}/pfl/prod/"
 
   execute:
@@ -318,16 +386,39 @@ jobs:
       - name: Install Databricks CLI
         run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
 
-      - name: Generate notebook pipeline job
-        run: python PFL/scripts/generate_notebook_job.py
+      - name: Resolve Databricks credentials for target
+        id: creds
+        run: |
+          case "${{ env.TARGET }}" in
+            prod) echo "token_env=DATABRICKS_TOKEN_PROD" >> "$GITHUB_OUTPUT"; echo "host_env=DATABRICKS_HOST_PROD" >> "$GITHUB_OUTPUT" ;;
+            uat)  echo "token_env=DATABRICKS_TOKEN_UAT"  >> "$GITHUB_OUTPUT"; echo "host_env=DATABRICKS_HOST_UAT"  >> "$GITHUB_OUTPUT" ;;
+            *)    echo "token_env=DATABRICKS_TOKEN_DEV"  >> "$GITHUB_OUTPUT"; echo "host_env=DATABRICKS_HOST_DEV"  >> "$GITHUB_OUTPUT" ;;
+          esac
 
-      - name: Generate hotfix job resource (if any)
+      - name: Generate notebook job spec
         env:
           BEFORE_SHA: ${{ github.event.before }}
           AFTER_SHA: ${{ github.sha }}
+          ENVIRONMENT: ${{ env.TARGET }}
+          BRANCH_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_NUMBER: ${{ github.run_number }}
+        run: python PFL/scripts/generate_notebook_job.py
+        working-directory: PFL/scripts
+
+      - name: Generate hotfix job spec (if any)
+        env:
+          BEFORE_SHA: ${{ github.event.before }}
+          AFTER_SHA: ${{ github.sha }}
+          ENVIRONMENT: ${{ env.TARGET }}
+          BRANCH_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          RUN_NUMBER: ${{ github.run_number }}
         run: python PFL/scripts/generate_hotfix_resource.py
+        working-directory: PFL/scripts
 
-      - name: Run notebook job on Databricks
+      - name: Create and run notebook job (if generated)
+        if: hashFiles('PFL/generated/notebook_job.json') != ''
         env:
           DATABRICKS_TOKEN: >-
             ${{ env.TARGET == 'prod' && secrets.DATABRICKS_TOKEN_PROD
@@ -337,10 +428,28 @@ jobs:
             ${{ env.TARGET == 'prod' && vars.DATABRICKS_HOST_PROD
              || env.TARGET == 'uat'  && vars.DATABRICKS_HOST_UAT
              || vars.DATABRICKS_HOST_DEV }}
-        run: databricks bundle run dummy_cicd_smoke_test -t ${{ env.TARGET }}
+        run: |
+          JOB_ID=$(databricks jobs create --json @PFL/generated/notebook_job.json | jq -r .job_id)
+          echo "Created notebook job $JOB_ID"
+          RUN_ID=$(databricks jobs run-now --job-id "$JOB_ID" | jq -r .run_id)
+          echo "Triggered run $RUN_ID"
+          while true; do
+            STATE=$(databricks jobs get-run --run-id "$RUN_ID" | jq -r .state.life_cycle_state)
+            echo "Run $RUN_ID state: $STATE"
+            case "$STATE" in
+              TERMINATED|SKIPPED|INTERNAL_ERROR) break ;;
+            esac
+            sleep 15
+          done
+          RESULT=$(databricks jobs get-run --run-id "$RUN_ID" | jq -r .state.result_state)
+          echo "Run $RUN_ID result: $RESULT"
+          if [ "$RESULT" != "SUCCESS" ]; then
+            echo "Notebook job run did not succeed."
+            exit 1
+          fi
 
-      - name: Run hotfix job on Databricks (if generated)
-        if: hashFiles('PFL/resources/hotfix_job.yml') != ''
+      - name: Create and run hotfix job (if generated)
+        if: hashFiles('PFL/generated/hotfix_job.json') != ''
         env:
           DATABRICKS_TOKEN: >-
             ${{ env.TARGET == 'prod' && secrets.DATABRICKS_TOKEN_PROD
@@ -350,4 +459,22 @@ jobs:
             ${{ env.TARGET == 'prod' && vars.DATABRICKS_HOST_PROD
              || env.TARGET == 'uat'  && vars.DATABRICKS_HOST_UAT
              || vars.DATABRICKS_HOST_DEV }}
-        run: databricks bundle run hotfix_job -t ${{ env.TARGET }}
+        run: |
+          JOB_ID=$(databricks jobs create --json @PFL/generated/hotfix_job.json | jq -r .job_id)
+          echo "Created hotfix job $JOB_ID"
+          RUN_ID=$(databricks jobs run-now --job-id "$JOB_ID" | jq -r .run_id)
+          echo "Triggered run $RUN_ID"
+          while true; do
+            STATE=$(databricks jobs get-run --run-id "$RUN_ID" | jq -r .state.life_cycle_state)
+            echo "Run $RUN_ID state: $STATE"
+            case "$STATE" in
+              TERMINATED|SKIPPED|INTERNAL_ERROR) break ;;
+            esac
+            sleep 15
+          done
+          RESULT=$(databricks jobs get-run --run-id "$RUN_ID" | jq -r .state.result_state)
+          echo "Run $RUN_ID result: $RESULT"
+          if [ "$RESULT" != "SUCCESS" ]; then
+            echo "Hotfix job run did not succeed."
+            exit 1
+          fi

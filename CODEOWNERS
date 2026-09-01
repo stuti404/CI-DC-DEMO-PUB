@@ -1,8 +1,3 @@
-# Both accounts are listed on every path because GitHub blocks self-approval
-# outright - whoever opens a PR can never clear the code-owner requirement
-# on it, so the other account always has to review.
-
-/databricks.yml       @stuti404 @Stuti-Ganit
-/PFL/resources/       @stuti404 @Stuti-Ganit
 /PFL/notebooks/       @stuti404 @Stuti-Ganit
+/PFL/scripts/         @stuti404 @Stuti-Ganit
 /.github/             @stuti404 @Stuti-Ganit
