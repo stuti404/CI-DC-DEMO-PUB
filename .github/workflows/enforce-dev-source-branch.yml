@@ -15,20 +15,12 @@ jobs:
     steps:
       - name: Verify PR source is a feature branch
         run: |
-          # Exact-match by design: git ref names cannot contain leading/trailing
-          # whitespace, and case differences (e.g. "Feature/x" vs "feature/x")
-          # are meaningfully different branches that should NOT be treated as
-          # equivalent.
           HEAD_REF="${{ github.event.pull_request.head.ref }}"
           case "$HEAD_REF" in
             feature/*)
               exit 0
               ;;
           esac
-          # Also allow the automated hotfix-backport PRs opened by
-          # backport-hotfix.yml (korthout/backport-action names them
-          # backport-<pr-number>-to-dev) - otherwise this check would
-          # auto-close the very PRs that keep dev in sync with main.
           case "$HEAD_REF" in
             backport-*-to-dev)
               exit 0
@@ -47,4 +39,83 @@ jobs:
           gh pr comment "${{ github.event.pull_request.number }}" \
             --repo "${{ github.repository }}" \
             --body "Closing automatically: PRs into \`dev\` must come from a \`feature/*\` branch. This PR's source branch is \`$HEAD_REF\`, which is not allowed. Rename your branch to start with \`feature/\` and open a new PR."
+          gh pr close "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}"
+
+  check-pfl-execute-single-file:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Verify feature PR touches at most one PFL_EXECUTE file
+        id: check
+        run: |
+          HEAD_REF="${{ github.event.pull_request.head.ref }}"
+          case "$HEAD_REF" in
+            feature/*) ;;
+            *)
+              echo "Not a feature PR - the PFL_EXECUTE single-file rule does not apply."
+              exit 0
+              ;;
+          esac
+
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+
+          TOUCHED=$(git diff --name-status --diff-filter=AM "$BASE_SHA" "$HEAD_SHA" -- PFL_EXECUTE/)
+          COUNT=$(printf '%s\n' "$TOUCHED" | grep -c . || true)
+
+          if [ "$COUNT" -eq 0 ]; then
+            echo "No PFL_EXECUTE/ changes in this PR - nothing to check."
+            exit 0
+          fi
+
+          if [ "$COUNT" -gt 1 ]; then
+            echo "reason=count" >> "$GITHUB_OUTPUT"
+            echo "Feature PRs into dev may add or modify at most one file under PFL_EXECUTE/. Found $COUNT:"
+            printf '%s\n' "$TOUCHED"
+            exit 1
+          fi
+
+          STATUS=$(printf '%s\n' "$TOUCHED" | cut -f1)
+          FILE=$(printf '%s\n' "$TOUCHED" | cut -f2)
+          echo "file=$FILE" >> "$GITHUB_OUTPUT"
+          echo "Single touched file: $FILE (status $STATUS)"
+
+          FIRST_LINE=$(git show "$HEAD_SHA:$FILE" | head -n1)
+          if [ "$FIRST_LINE" != "# Databricks notebook source" ]; then
+            echo "reason=not_notebook" >> "$GITHUB_OUTPUT"
+            echo "$FILE must be a Databricks notebook (first line '# Databricks notebook source'). Found: '$FIRST_LINE'"
+            exit 1
+          fi
+
+          if [ "$STATUS" = "A" ]; then
+            git fetch --no-tags origin dev
+            if git cat-file -e "origin/dev:$FILE" 2>/dev/null; then
+              echo "reason=exists" >> "$GITHUB_OUTPUT"
+              echo "$FILE already exists on dev."
+              exit 1
+            fi
+          fi
+
+          echo "OK: $FILE passes the single-file check."
+
+      - name: Auto-close on rejection
+        if: failure() && github.event.action == 'opened'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          FILE="${{ steps.check.outputs.file }}"
+          REASON="${{ steps.check.outputs.reason }}"
+          if [ "$REASON" = "exists" ]; then
+            BODY="Closing automatically: \`$FILE\` already exists on \`dev\`. A newly added file under \`PFL_EXECUTE/\` must have a unique name - rename it, or if you meant to change the existing file, commit it as a modification instead of an add."
+          elif [ "$REASON" = "not_notebook" ]; then
+            BODY="Closing automatically: \`$FILE\` doesn't start with \`# Databricks notebook source\`. The pipeline deploys this file as a real Databricks job task, so it must be a valid Databricks notebook."
+          else
+            BODY="Closing automatically: this PR touches more than one file under \`PFL_EXECUTE/\`. Feature PRs into \`dev\` may add or modify at most one file there per PR."
+          fi
+          gh pr comment "${{ github.event.pull_request.number }}" \
+            --repo "${{ github.repository }}" \
+            --body "$BODY"
           gh pr close "${{ github.event.pull_request.number }}" --repo "${{ github.repository }}"

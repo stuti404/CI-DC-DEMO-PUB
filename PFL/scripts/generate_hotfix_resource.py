@@ -3,99 +3,94 @@ import re
 import subprocess
 import sys
 
-REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-RESOURCE_PATH = os.path.join(REPO_ROOT, "PFL", "resources", "hotfix_job.yml")
+import job_common
 
-TEMPLATE = """resources:
-  jobs:
-    hotfix_job:
-      name: "[${{bundle.target}}] hotfix-job"
-      max_concurrent_runs: 1
-      tags:
-        managed_by: databricks-asset-bundle
-        pipeline: pfl-cicd-demo
-        generated_by: generate_hotfix_resource.py
+EXECUTE_SUBDIR = "PFL_EXECUTE"
+OUTPUT_JSON = os.path.join(job_common.GENERATED_DIR, "hotfix_job.json")
+OUTPUT_MANIFEST = os.path.join(job_common.GENERATED_DIR, "hotfix_files.txt")
 
-      tasks:
-{tasks_yaml}
-"""
-
-TASK_TEMPLATE = """        - task_key: {task_key}
-          notebook_task:
-            notebook_path: ../../PFL_EXECUTE/{filename}
-            base_parameters:
-              environment: ${{bundle.target}}
-"""
+NOTEBOOK_REFERENCE_RE = re.compile(r"PFL/notebooks/([A-Za-z0-9_\-]+\.py)")
 
 
-def sanitize_task_key(filename):
-    name = os.path.splitext(filename)[0]
-    name = re.sub(r"[^A-Za-z0-9_]", "_", name)
-    if re.match(r"^\d", name):
-        name = f"t_{name}"
-    return name.lower()
+def find_referenced_notebooks(after_sha, execute_filename):
+    result = subprocess.run(
+        ["git", "show", f"{after_sha}:{EXECUTE_SUBDIR}/{execute_filename}"],
+        cwd=job_common.REPO_ROOT, capture_output=True, text=True, check=True,
+    )
+    return sorted(set(NOTEBOOK_REFERENCE_RE.findall(result.stdout)))
 
 
-def find_changed_pfl_execute_files(before_sha, after_sha):
-    if not before_sha or set(before_sha) == {"0"}:
-        print("No usable 'before' SHA (first push on branch, or force-push) - skipping hotfix job generation.")
-        return []
-
-    try:
-        diff = subprocess.run(
-            ["git", "diff", "--name-only", "--diff-filter=AM", before_sha, after_sha, "--", "PFL_EXECUTE/"],
-            cwd=REPO_ROOT, capture_output=True, text=True, check=True,
-        )
-    except subprocess.CalledProcessError as e:
-        print(f"git diff failed ({e}) - skipping hotfix job generation.")
-        return []
-
-    changed = [os.path.basename(f) for f in diff.stdout.splitlines() if f.strip().endswith(".py")]
-
-    if not changed:
-        print("No added/modified PFL_EXECUTE/*.py file in this push - nothing to generate.")
-    return changed
+def verify_notebook_exists(after_sha, notebook_filename):
+    result = subprocess.run(
+        ["git", "cat-file", "-e", f"{after_sha}:PFL/notebooks/{notebook_filename}"],
+        cwd=job_common.REPO_ROOT, capture_output=True, text=True,
+    )
+    return result.returncode == 0
 
 
-def build_tasks(filenames):
+def build_tasks(filenames, after_sha, environment):
     tasks = []
     seen_keys = {}
-    for filename in filenames:
-        task_key = sanitize_task_key(filename)
-        if task_key in seen_keys:
+    referenced_task_keys = {}
+
+    def register(filename):
+        task_key = job_common.sanitize_task_key(filename)
+        if task_key in seen_keys and seen_keys[task_key] != filename:
             sys.exit(
                 f"Task key collision: '{filename}' and '{seen_keys[task_key]}' "
                 f"both sanitize to '{task_key}'"
             )
         seen_keys[task_key] = filename
-        tasks.append((task_key, filename))
+        return task_key
+
+    for filename in filenames:
+        task_key = register(filename)
+        depends_on = []
+
+        for notebook in find_referenced_notebooks(after_sha, filename):
+            if not verify_notebook_exists(after_sha, notebook):
+                sys.exit(
+                    f"'{filename}' references 'PFL/notebooks/{notebook}', "
+                    f"but that file does not exist."
+                )
+            if notebook not in referenced_task_keys:
+                notebook_key = register(notebook)
+                referenced_task_keys[notebook] = notebook_key
+                tasks.append({
+                    "task_key": notebook_key,
+                    "notebook_path": f"{job_common.WORKSPACE_ROOT[environment]}/notebooks/{notebook}",
+                })
+            depends_on.append(referenced_task_keys[notebook])
+
+        tasks.append({
+            "task_key": task_key,
+            "notebook_path": f"{job_common.WORKSPACE_ROOT[environment]}/PFL_EXECUTE/{filename}",
+            "depends_on": depends_on,
+        })
+
     return tasks
-
-
-def render_tasks(tasks):
-    return "\n".join(
-        TASK_TEMPLATE.format(task_key=task_key, filename=filename)
-        for task_key, filename in tasks
-    )
 
 
 def main():
     before_sha = os.environ.get("BEFORE_SHA", "")
     after_sha = os.environ.get("AFTER_SHA", "")
+    environment = os.environ.get("ENVIRONMENT", "dev")
 
-    filenames = find_changed_pfl_execute_files(before_sha, after_sha)
+    filenames = job_common.get_changed_files(before_sha, after_sha, EXECUTE_SUBDIR, diff_filter="AM")
+
     if not filenames:
-        if os.path.exists(RESOURCE_PATH):
-            os.remove(RESOURCE_PATH)
+        job_common.clear_stale(OUTPUT_JSON)
+        job_common.clear_stale(OUTPUT_MANIFEST)
         return
 
-    tasks = build_tasks(filenames)
+    tasks = build_tasks(filenames, after_sha, environment)
+    job_name = job_common.build_job_name("pfl-hotfix")
+    spec = job_common.build_job_spec(job_name, tasks, environment, "generate_hotfix_resource.py")
 
-    os.makedirs(os.path.dirname(RESOURCE_PATH), exist_ok=True)
-    with open(RESOURCE_PATH, "w") as f:
-        f.write(TEMPLATE.format(tasks_yaml=render_tasks(tasks)))
+    job_common.write_job_json(OUTPUT_JSON, spec)
+    job_common.write_manifest(OUTPUT_MANIFEST, filenames)
 
-    print(f"Generated {RESOURCE_PATH} with {len(tasks)} task(s): {[t[0] for t in tasks]}")
+    print(f"Generated {OUTPUT_JSON} ('{job_name}') with {len(tasks)} task(s): {[t['task_key'] for t in tasks]}")
 
 
 if __name__ == "__main__":
