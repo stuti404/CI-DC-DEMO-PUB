@@ -30,27 +30,36 @@ jobs:
             *)    echo "target=dev"  >> "$GITHUB_OUTPUT" ;;
           esac
 
+      - name: Resolve diff range
+        id: diff_range
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            echo "before=${{ github.event.pull_request.base.sha }}" >> "$GITHUB_OUTPUT"
+            echo "after=${{ github.event.pull_request.head.sha }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "before=${{ github.event.before }}" >> "$GITHUB_OUTPUT"
+            echo "after=${{ github.sha }}" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Generate notebook job spec
         env:
-          BEFORE_SHA: ${{ github.event.before }}
-          AFTER_SHA: ${{ github.sha }}
+          BEFORE_SHA: ${{ steps.diff_range.outputs.before }}
+          AFTER_SHA: ${{ steps.diff_range.outputs.after }}
           ENVIRONMENT: ${{ steps.target.outputs.target }}
-          BRANCH_NAME: ${{ github.ref_name }}
-          COMMIT_SHA: ${{ github.sha }}
+          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+          COMMIT_SHA: ${{ steps.diff_range.outputs.after }}
           RUN_NUMBER: ${{ github.run_number }}
         run: python PFL/scripts/generate_notebook_job.py
-        working-directory: PFL/scripts
 
       - name: Generate hotfix job spec (if any)
         env:
-          BEFORE_SHA: ${{ github.event.before }}
-          AFTER_SHA: ${{ github.sha }}
+          BEFORE_SHA: ${{ steps.diff_range.outputs.before }}
+          AFTER_SHA: ${{ steps.diff_range.outputs.after }}
           ENVIRONMENT: ${{ steps.target.outputs.target }}
-          BRANCH_NAME: ${{ github.ref_name }}
-          COMMIT_SHA: ${{ github.sha }}
+          BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
+          COMMIT_SHA: ${{ steps.diff_range.outputs.after }}
           RUN_NUMBER: ${{ github.run_number }}
         run: python PFL/scripts/generate_hotfix_resource.py
-        working-directory: PFL/scripts
 
       - name: Validate notebook headers and job specs
         run: |
@@ -114,7 +123,6 @@ jobs:
           COMMIT_SHA: ${{ github.sha }}
           RUN_NUMBER: ${{ github.run_number }}
         run: python PFL/scripts/generate_notebook_job.py
-        working-directory: PFL/scripts
 
       - name: Generate hotfix job spec (if any)
         env:
@@ -125,7 +133,6 @@ jobs:
           COMMIT_SHA: ${{ github.sha }}
           RUN_NUMBER: ${{ github.run_number }}
         run: python PFL/scripts/generate_hotfix_resource.py
-        working-directory: PFL/scripts
 
       - name: Import changed files to workspace
         run: |
@@ -207,7 +214,6 @@ jobs:
           COMMIT_SHA: ${{ github.sha }}
           RUN_NUMBER: ${{ github.run_number }}
         run: python PFL/scripts/generate_notebook_job.py
-        working-directory: PFL/scripts
 
       - name: Generate hotfix job spec (if any)
         env:
@@ -218,7 +224,6 @@ jobs:
           COMMIT_SHA: ${{ github.sha }}
           RUN_NUMBER: ${{ github.run_number }}
         run: python PFL/scripts/generate_hotfix_resource.py
-        working-directory: PFL/scripts
 
       - name: Import changed files to workspace
         run: |
@@ -301,7 +306,6 @@ jobs:
           COMMIT_SHA: ${{ github.sha }}
           RUN_NUMBER: ${{ github.run_number }}
         run: python PFL/scripts/generate_notebook_job.py
-        working-directory: PFL/scripts
 
       - name: Generate hotfix job spec (if any)
         env:
@@ -312,7 +316,6 @@ jobs:
           COMMIT_SHA: ${{ github.sha }}
           RUN_NUMBER: ${{ github.run_number }}
         run: python PFL/scripts/generate_hotfix_resource.py
-        working-directory: PFL/scripts
 
       - name: Import changed files to workspace
         run: |
@@ -404,7 +407,6 @@ jobs:
           COMMIT_SHA: ${{ github.sha }}
           RUN_NUMBER: ${{ github.run_number }}
         run: python PFL/scripts/generate_notebook_job.py
-        working-directory: PFL/scripts
 
       - name: Generate hotfix job spec (if any)
         env:
@@ -415,7 +417,6 @@ jobs:
           COMMIT_SHA: ${{ github.sha }}
           RUN_NUMBER: ${{ github.run_number }}
         run: python PFL/scripts/generate_hotfix_resource.py
-        working-directory: PFL/scripts
 
       - name: Create and run notebook job (if generated)
         if: hashFiles('PFL/generated/notebook_job.json') != ''
