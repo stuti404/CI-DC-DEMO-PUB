@@ -14,7 +14,4 @@ second_check = 2 * 5
 assert second_check == 10
 
 print("Smoke test passed")
-# feature work
-# Real change marker: 1787579348
-# Retest marker: full-flow-recheck
-# Verify pipeline-hardening plan end-to-end
+print("Testing the flow end to end")
