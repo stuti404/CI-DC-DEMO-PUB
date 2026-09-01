@@ -14,31 +14,31 @@ resources:
         pause_status: PAUSED
 
       tasks:
-        - task_key: ingest_smoke_test
-          notebook_task:
-            notebook_path: ../notebooks/smoke_test.py
-            base_parameters:
-              environment: ${bundle.target}
-
-        - task_key: transform_smoke_test
-          depends_on:
-            - task_key: ingest_smoke_test
-          notebook_task:
-            notebook_path: ../notebooks/smoke_v1.py
-            base_parameters:
-              environment: ${bundle.target}
-
-        - task_key: validate_smoke_test
-          depends_on:
-            - task_key: transform_smoke_test
+        - task_key: hotfix_v1
           notebook_task:
             notebook_path: ../notebooks/Hotfix_v1.py
             base_parameters:
               environment: ${bundle.target}
 
+        - task_key: notebook_jobtesting
+          notebook_task:
+            notebook_path: ../notebooks/notebook-jobtesting.py
+            base_parameters:
+              environment: ${bundle.target}
+
+        - task_key: smoke_test
+          notebook_task:
+            notebook_path: ../notebooks/smoke_test.py
+            base_parameters:
+              environment: ${bundle.target}
+
+        - task_key: smoke_v1
+          notebook_task:
+            notebook_path: ../notebooks/smoke_v1.py
+            base_parameters:
+              environment: ${bundle.target}
+
         - task_key: verify_dynamic_pipeline
-          depends_on:
-            - task_key: validate_smoke_test
           notebook_task:
             notebook_path: ../notebooks/verify_dynamic_pipeline.py
             base_parameters:
