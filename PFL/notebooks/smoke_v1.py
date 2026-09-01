@@ -15,3 +15,4 @@ assert second_check == 10
 
 print("Smoke test passed")
 print("Testing the flow end to end")
+print("verify direct-api live run")
