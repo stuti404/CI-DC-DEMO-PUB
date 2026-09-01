@@ -33,10 +33,10 @@ jobs:
             sleep 10
           done
 
-          if gh pr merge "$PR_NUM" --repo "$REPO" --squash; then
+          if gh pr merge "$PR_NUM" --repo "$REPO" --merge; then
             echo "Merged #$PR_NUM immediately"
           else
             echo "Not mergeable yet - enabling auto-merge for #$PR_NUM instead"
-            gh pr merge "$PR_NUM" --repo "$REPO" --squash --auto \
+            gh pr merge "$PR_NUM" --repo "$REPO" --merge --auto \
               || echo "Could not enable auto-merge for #$PR_NUM - left open for manual merge"
           fi
