@@ -436,7 +436,7 @@ jobs:
             exit 1
           fi
           echo "Created notebook job $JOB_ID"
-          RUN_ID=$(databricks jobs run-now --job-id "$JOB_ID" -o json | jq -r .run_id)
+          RUN_ID=$(databricks jobs run-now "$JOB_ID" -o json | jq -r .run_id)
           if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
             echo "Failed to trigger run - no run_id returned."
             exit 1
@@ -445,7 +445,7 @@ jobs:
           ATTEMPTS=0
           MAX_ATTEMPTS=60
           while [ "$ATTEMPTS" -lt "$MAX_ATTEMPTS" ]; do
-            STATE=$(databricks jobs get-run --run-id "$RUN_ID" -o json | jq -r .state.life_cycle_state)
+            STATE=$(databricks jobs get-run "$RUN_ID" -o json | jq -r .state.life_cycle_state)
             echo "Run $RUN_ID state: $STATE"
             case "$STATE" in
               TERMINATED|SKIPPED|INTERNAL_ERROR) break ;;
@@ -457,7 +457,7 @@ jobs:
             echo "Timed out waiting for run $RUN_ID to reach a terminal state."
             exit 1
           fi
-          RESULT=$(databricks jobs get-run --run-id "$RUN_ID" -o json | jq -r .state.result_state)
+          RESULT=$(databricks jobs get-run "$RUN_ID" -o json | jq -r .state.result_state)
           echo "Run $RUN_ID result: $RESULT"
           if [ "$RESULT" != "SUCCESS" ]; then
             echo "Notebook job run did not succeed."
@@ -476,19 +476,34 @@ jobs:
              || env.TARGET == 'uat'  && vars.DATABRICKS_HOST_UAT
              || vars.DATABRICKS_HOST_DEV }}
         run: |
-          JOB_ID=$(databricks jobs create --json @PFL/generated/hotfix_job.json | jq -r .job_id)
+          JOB_ID=$(databricks jobs create --json @PFL/generated/hotfix_job.json -o json | jq -r .job_id)
+          if [ -z "$JOB_ID" ] || [ "$JOB_ID" = "null" ]; then
+            echo "Failed to create hotfix job - no job_id returned."
+            exit 1
+          fi
           echo "Created hotfix job $JOB_ID"
-          RUN_ID=$(databricks jobs run-now --job-id "$JOB_ID" | jq -r .run_id)
+          RUN_ID=$(databricks jobs run-now "$JOB_ID" -o json | jq -r .run_id)
+          if [ -z "$RUN_ID" ] || [ "$RUN_ID" = "null" ]; then
+            echo "Failed to trigger run - no run_id returned."
+            exit 1
+          fi
           echo "Triggered run $RUN_ID"
-          while true; do
-            STATE=$(databricks jobs get-run --run-id "$RUN_ID" | jq -r .state.life_cycle_state)
+          ATTEMPTS=0
+          MAX_ATTEMPTS=60
+          while [ "$ATTEMPTS" -lt "$MAX_ATTEMPTS" ]; do
+            STATE=$(databricks jobs get-run "$RUN_ID" -o json | jq -r .state.life_cycle_state)
             echo "Run $RUN_ID state: $STATE"
             case "$STATE" in
               TERMINATED|SKIPPED|INTERNAL_ERROR) break ;;
             esac
+            ATTEMPTS=$((ATTEMPTS + 1))
             sleep 15
           done
-          RESULT=$(databricks jobs get-run --run-id "$RUN_ID" | jq -r .state.result_state)
+          if [ "$ATTEMPTS" -ge "$MAX_ATTEMPTS" ]; then
+            echo "Timed out waiting for run $RUN_ID to reach a terminal state."
+            exit 1
+          fi
+          RESULT=$(databricks jobs get-run "$RUN_ID" -o json | jq -r .state.result_state)
           echo "Run $RUN_ID result: $RESULT"
           if [ "$RESULT" != "SUCCESS" ]; then
             echo "Hotfix job run did not succeed."
