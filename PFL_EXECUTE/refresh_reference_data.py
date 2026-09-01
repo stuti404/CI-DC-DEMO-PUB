@@ -4,4 +4,4 @@ env = dbutils.widgets.get("environment")
 
 # COMMAND ----------
 
-print(f"[{env}] hotfix execute file ran successfully")
+print(f"[{env}] Stuti is execute file ran successfully")
