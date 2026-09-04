@@ -7,9 +7,9 @@ REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__fi
 GENERATED_DIR = os.path.join(REPO_ROOT, "PFL", "generated")
 
 WORKSPACE_ROOT = {
-    "dev": "/Users/stuti@ganitinc.com/pfl-cicd/dev",
-    "uat": "/Users/stuti@ganitinc.com/pfl-cicd/uat",
-    "prod": "/Users/stuti@ganitinc.com/pfl-cicd/prod",
+    "dev": "/Shared/pfl-cicd/dev",
+    "uat": "/Shared/pfl-cicd/uat",
+    "prod": "/Shared/pfl-cicd/prod",
 }
 
 
