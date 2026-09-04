@@ -6,11 +6,8 @@ import subprocess
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 GENERATED_DIR = os.path.join(REPO_ROOT, "PFL", "generated")
 
-WORKSPACE_ROOT = {
-    "dev": "/Shared/pfl-cicd/dev",
-    "uat": "/Shared/pfl-cicd/uat",
-    "prod": "/Shared/pfl-cicd/prod",
-}
+GIT_URL = "https://github.com/stuti404/CI-DC-DEMO-PUB"
+GIT_PROVIDER = "gitHub"
 
 
 def sanitize_task_key(filename):
@@ -58,13 +55,14 @@ def build_job_name(prefix):
     return f"{prefix}-{sanitize_branch(branch)}-{sha[:8]}-run{run_number}"
 
 
-def build_job_spec(job_name, tasks, environment, generated_by):
+def build_job_spec(job_name, tasks, environment, generated_by, git_commit):
     job_tasks = []
     for task in tasks:
         entry = {
             "task_key": task["task_key"],
             "notebook_task": {
                 "notebook_path": task["notebook_path"],
+                "source": "GIT",
                 "base_parameters": {"environment": environment},
             },
         }
@@ -80,6 +78,11 @@ def build_job_spec(job_name, tasks, environment, generated_by):
             "pipeline": "pfl-cicd-demo",
             "environment": environment,
             "generated_by": generated_by,
+        },
+        "git_source": {
+            "git_url": GIT_URL,
+            "git_provider": GIT_PROVIDER,
+            "git_commit": git_commit,
         },
         "tasks": job_tasks,
     }
