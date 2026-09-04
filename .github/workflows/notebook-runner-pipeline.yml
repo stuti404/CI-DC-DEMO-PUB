@@ -103,48 +103,10 @@ jobs:
     runs-on: codebuild-pfl-databricks-runner-${{ github.run_id }}-${{ github.run_attempt }}
     outputs:
       target: dev
-    env:
-      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_DEV }}
-      DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST_DEV }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Install Databricks CLI
-        run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
-
-      - name: Generate notebook job spec
-        env:
-          BEFORE_SHA: ${{ github.event.before }}
-          AFTER_SHA: ${{ github.sha }}
-          ENVIRONMENT: dev
-          BRANCH_NAME: ${{ github.ref_name }}
-          COMMIT_SHA: ${{ github.sha }}
-          RUN_NUMBER: ${{ github.run_number }}
-        run: python PFL/scripts/generate_notebook_job.py
-
-      - name: Generate hotfix job spec (if any)
-        env:
-          BEFORE_SHA: ${{ github.event.before }}
-          AFTER_SHA: ${{ github.sha }}
-          ENVIRONMENT: dev
-          BRANCH_NAME: ${{ github.ref_name }}
-          COMMIT_SHA: ${{ github.sha }}
-          RUN_NUMBER: ${{ github.run_number }}
-        run: python PFL/scripts/generate_hotfix_resource.py
-
-      - name: Import changed files to workspace
-        run: |
-          WORKSPACE_ROOT="/Users/stuti@ganitinc.com/pfl-cicd/dev"
-          databricks workspace mkdirs "$WORKSPACE_ROOT/notebooks"
-          databricks workspace mkdirs "$WORKSPACE_ROOT/PFL_EXECUTE"
-          for f in $(cat PFL/generated/notebook_files.txt 2>/dev/null); do
-            databricks workspace import "$WORKSPACE_ROOT/notebooks/$f" --file "PFL/notebooks/$f" --language PYTHON --format SOURCE --overwrite
-          done
-          for f in $(cat PFL/generated/hotfix_files.txt 2>/dev/null); do
-            databricks workspace import "$WORKSPACE_ROOT/PFL_EXECUTE/$f" --file "PFL_EXECUTE/$f" --language PYTHON --format SOURCE --overwrite
-          done
 
       - name: Package changed files as build artifact
         run: |
@@ -194,48 +156,10 @@ jobs:
     runs-on: codebuild-pfl-databricks-runner-${{ github.run_id }}-${{ github.run_attempt }}
     outputs:
       target: uat
-    env:
-      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_UAT }}
-      DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST_UAT }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Install Databricks CLI
-        run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
-
-      - name: Generate notebook job spec
-        env:
-          BEFORE_SHA: ${{ github.event.before }}
-          AFTER_SHA: ${{ github.sha }}
-          ENVIRONMENT: uat
-          BRANCH_NAME: ${{ github.ref_name }}
-          COMMIT_SHA: ${{ github.sha }}
-          RUN_NUMBER: ${{ github.run_number }}
-        run: python PFL/scripts/generate_notebook_job.py
-
-      - name: Generate hotfix job spec (if any)
-        env:
-          BEFORE_SHA: ${{ github.event.before }}
-          AFTER_SHA: ${{ github.sha }}
-          ENVIRONMENT: uat
-          BRANCH_NAME: ${{ github.ref_name }}
-          COMMIT_SHA: ${{ github.sha }}
-          RUN_NUMBER: ${{ github.run_number }}
-        run: python PFL/scripts/generate_hotfix_resource.py
-
-      - name: Import changed files to workspace
-        run: |
-          WORKSPACE_ROOT="/Users/stuti@ganitinc.com/pfl-cicd/uat"
-          databricks workspace mkdirs "$WORKSPACE_ROOT/notebooks"
-          databricks workspace mkdirs "$WORKSPACE_ROOT/PFL_EXECUTE"
-          for f in $(cat PFL/generated/notebook_files.txt 2>/dev/null); do
-            databricks workspace import "$WORKSPACE_ROOT/notebooks/$f" --file "PFL/notebooks/$f" --language PYTHON --format SOURCE --overwrite
-          done
-          for f in $(cat PFL/generated/hotfix_files.txt 2>/dev/null); do
-            databricks workspace import "$WORKSPACE_ROOT/PFL_EXECUTE/$f" --file "PFL_EXECUTE/$f" --language PYTHON --format SOURCE --overwrite
-          done
 
       - name: Package changed files as build artifact
         run: |
@@ -286,48 +210,10 @@ jobs:
     environment: production
     outputs:
       target: prod
-    env:
-      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_PROD }}
-      DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST_PROD }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-
-      - name: Install Databricks CLI
-        run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
-
-      - name: Generate notebook job spec
-        env:
-          BEFORE_SHA: ${{ github.event.before }}
-          AFTER_SHA: ${{ github.sha }}
-          ENVIRONMENT: prod
-          BRANCH_NAME: ${{ github.ref_name }}
-          COMMIT_SHA: ${{ github.sha }}
-          RUN_NUMBER: ${{ github.run_number }}
-        run: python PFL/scripts/generate_notebook_job.py
-
-      - name: Generate hotfix job spec (if any)
-        env:
-          BEFORE_SHA: ${{ github.event.before }}
-          AFTER_SHA: ${{ github.sha }}
-          ENVIRONMENT: prod
-          BRANCH_NAME: ${{ github.ref_name }}
-          COMMIT_SHA: ${{ github.sha }}
-          RUN_NUMBER: ${{ github.run_number }}
-        run: python PFL/scripts/generate_hotfix_resource.py
-
-      - name: Import changed files to workspace
-        run: |
-          WORKSPACE_ROOT="/Users/stuti@ganitinc.com/pfl-cicd/prod"
-          databricks workspace mkdirs "$WORKSPACE_ROOT/notebooks"
-          databricks workspace mkdirs "$WORKSPACE_ROOT/PFL_EXECUTE"
-          for f in $(cat PFL/generated/notebook_files.txt 2>/dev/null); do
-            databricks workspace import "$WORKSPACE_ROOT/notebooks/$f" --file "PFL/notebooks/$f" --language PYTHON --format SOURCE --overwrite
-          done
-          for f in $(cat PFL/generated/hotfix_files.txt 2>/dev/null); do
-            databricks workspace import "$WORKSPACE_ROOT/PFL_EXECUTE/$f" --file "PFL_EXECUTE/$f" --language PYTHON --format SOURCE --overwrite
-          done
 
       - name: Package changed files as build artifact
         run: |
@@ -389,15 +275,6 @@ jobs:
       - name: Install Databricks CLI
         run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
 
-      - name: Resolve Databricks credentials for target
-        id: creds
-        run: |
-          case "${{ env.TARGET }}" in
-            prod) echo "token_env=DATABRICKS_TOKEN_PROD" >> "$GITHUB_OUTPUT"; echo "host_env=DATABRICKS_HOST_PROD" >> "$GITHUB_OUTPUT" ;;
-            uat)  echo "token_env=DATABRICKS_TOKEN_UAT"  >> "$GITHUB_OUTPUT"; echo "host_env=DATABRICKS_HOST_UAT"  >> "$GITHUB_OUTPUT" ;;
-            *)    echo "token_env=DATABRICKS_TOKEN_DEV"  >> "$GITHUB_OUTPUT"; echo "host_env=DATABRICKS_HOST_DEV"  >> "$GITHUB_OUTPUT" ;;
-          esac
-
       - name: Generate notebook job spec
         env:
           BEFORE_SHA: ${{ github.event.before }}
@@ -421,10 +298,14 @@ jobs:
       - name: Create and run notebook job (if generated)
         if: hashFiles('PFL/generated/notebook_job.json') != ''
         env:
-          DATABRICKS_TOKEN: >-
-            ${{ env.TARGET == 'prod' && secrets.DATABRICKS_TOKEN_PROD
-             || env.TARGET == 'uat'  && secrets.DATABRICKS_TOKEN_UAT
-             || secrets.DATABRICKS_TOKEN_DEV }}
+          DATABRICKS_CLIENT_ID: >-
+            ${{ env.TARGET == 'prod' && secrets.DATABRICKS_CI_TOKEN_PROD
+             || env.TARGET == 'uat'  && secrets.DATABRICKS_CI_TOKEN_UAT
+             || secrets.DATABRICKS_CI_TOKEN_DEV }}
+          DATABRICKS_CLIENT_SECRET: >-
+            ${{ env.TARGET == 'prod' && secrets.DATABRICKS_SPN_TOKEN_PROD
+             || env.TARGET == 'uat'  && secrets.DATABRICKS_SPN_TOKEN_UAT
+             || secrets.DATABRICKS_SPN_TOKEN_DEV }}
           DATABRICKS_HOST: >-
             ${{ env.TARGET == 'prod' && vars.DATABRICKS_HOST_PROD
              || env.TARGET == 'uat'  && vars.DATABRICKS_HOST_UAT
@@ -467,10 +348,14 @@ jobs:
       - name: Create and run hotfix job (if generated)
         if: hashFiles('PFL/generated/hotfix_job.json') != ''
         env:
-          DATABRICKS_TOKEN: >-
-            ${{ env.TARGET == 'prod' && secrets.DATABRICKS_TOKEN_PROD
-             || env.TARGET == 'uat'  && secrets.DATABRICKS_TOKEN_UAT
-             || secrets.DATABRICKS_TOKEN_DEV }}
+          DATABRICKS_CLIENT_ID: >-
+            ${{ env.TARGET == 'prod' && secrets.DATABRICKS_CI_TOKEN_PROD
+             || env.TARGET == 'uat'  && secrets.DATABRICKS_CI_TOKEN_UAT
+             || secrets.DATABRICKS_CI_TOKEN_DEV }}
+          DATABRICKS_CLIENT_SECRET: >-
+            ${{ env.TARGET == 'prod' && secrets.DATABRICKS_SPN_TOKEN_PROD
+             || env.TARGET == 'uat'  && secrets.DATABRICKS_SPN_TOKEN_UAT
+             || secrets.DATABRICKS_SPN_TOKEN_DEV }}
           DATABRICKS_HOST: >-
             ${{ env.TARGET == 'prod' && vars.DATABRICKS_HOST_PROD
              || env.TARGET == 'uat'  && vars.DATABRICKS_HOST_UAT
