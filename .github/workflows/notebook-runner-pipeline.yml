@@ -104,7 +104,8 @@ jobs:
     outputs:
       target: dev
     env:
-      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_DEV }}
+      DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CI_TOKEN_DEV }}
+      DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_SPN_TOKEN_DEV }}
       DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST_DEV }}
     steps:
       - uses: actions/checkout@v4
@@ -136,7 +137,7 @@ jobs:
 
       - name: Import changed files to workspace
         run: |
-          WORKSPACE_ROOT="/Users/stuti@ganitinc.com/pfl-cicd/dev"
+          WORKSPACE_ROOT="/Shared/pfl-cicd/dev"
           databricks workspace mkdirs "$WORKSPACE_ROOT/notebooks"
           databricks workspace mkdirs "$WORKSPACE_ROOT/PFL_EXECUTE"
           for f in $(cat PFL/generated/notebook_files.txt 2>/dev/null); do
@@ -195,7 +196,8 @@ jobs:
     outputs:
       target: uat
     env:
-      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_UAT }}
+      DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CI_TOKEN_UAT }}
+      DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_SPN_TOKEN_UAT }}
       DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST_UAT }}
     steps:
       - uses: actions/checkout@v4
@@ -227,7 +229,7 @@ jobs:
 
       - name: Import changed files to workspace
         run: |
-          WORKSPACE_ROOT="/Users/stuti@ganitinc.com/pfl-cicd/uat"
+          WORKSPACE_ROOT="/Shared/pfl-cicd/uat"
           databricks workspace mkdirs "$WORKSPACE_ROOT/notebooks"
           databricks workspace mkdirs "$WORKSPACE_ROOT/PFL_EXECUTE"
           for f in $(cat PFL/generated/notebook_files.txt 2>/dev/null); do
@@ -287,7 +289,8 @@ jobs:
     outputs:
       target: prod
     env:
-      DATABRICKS_TOKEN: ${{ secrets.DATABRICKS_TOKEN_PROD }}
+      DATABRICKS_CLIENT_ID: ${{ secrets.DATABRICKS_CI_TOKEN_PROD }}
+      DATABRICKS_CLIENT_SECRET: ${{ secrets.DATABRICKS_SPN_TOKEN_PROD }}
       DATABRICKS_HOST: ${{ vars.DATABRICKS_HOST_PROD }}
     steps:
       - uses: actions/checkout@v4
@@ -319,7 +322,7 @@ jobs:
 
       - name: Import changed files to workspace
         run: |
-          WORKSPACE_ROOT="/Users/stuti@ganitinc.com/pfl-cicd/prod"
+          WORKSPACE_ROOT="/Shared/pfl-cicd/prod"
           databricks workspace mkdirs "$WORKSPACE_ROOT/notebooks"
           databricks workspace mkdirs "$WORKSPACE_ROOT/PFL_EXECUTE"
           for f in $(cat PFL/generated/notebook_files.txt 2>/dev/null); do
@@ -389,15 +392,6 @@ jobs:
       - name: Install Databricks CLI
         run: curl -fsSL https://raw.githubusercontent.com/databricks/setup-cli/main/install.sh | sh
 
-      - name: Resolve Databricks credentials for target
-        id: creds
-        run: |
-          case "${{ env.TARGET }}" in
-            prod) echo "token_env=DATABRICKS_TOKEN_PROD" >> "$GITHUB_OUTPUT"; echo "host_env=DATABRICKS_HOST_PROD" >> "$GITHUB_OUTPUT" ;;
-            uat)  echo "token_env=DATABRICKS_TOKEN_UAT"  >> "$GITHUB_OUTPUT"; echo "host_env=DATABRICKS_HOST_UAT"  >> "$GITHUB_OUTPUT" ;;
-            *)    echo "token_env=DATABRICKS_TOKEN_DEV"  >> "$GITHUB_OUTPUT"; echo "host_env=DATABRICKS_HOST_DEV"  >> "$GITHUB_OUTPUT" ;;
-          esac
-
       - name: Generate notebook job spec
         env:
           BEFORE_SHA: ${{ github.event.before }}
@@ -421,10 +415,14 @@ jobs:
       - name: Create and run notebook job (if generated)
         if: hashFiles('PFL/generated/notebook_job.json') != ''
         env:
-          DATABRICKS_TOKEN: >-
-            ${{ env.TARGET == 'prod' && secrets.DATABRICKS_TOKEN_PROD
-             || env.TARGET == 'uat'  && secrets.DATABRICKS_TOKEN_UAT
-             || secrets.DATABRICKS_TOKEN_DEV }}
+          DATABRICKS_CLIENT_ID: >-
+            ${{ env.TARGET == 'prod' && secrets.DATABRICKS_CI_TOKEN_PROD
+             || env.TARGET == 'uat'  && secrets.DATABRICKS_CI_TOKEN_UAT
+             || secrets.DATABRICKS_CI_TOKEN_DEV }}
+          DATABRICKS_CLIENT_SECRET: >-
+            ${{ env.TARGET == 'prod' && secrets.DATABRICKS_SPN_TOKEN_PROD
+             || env.TARGET == 'uat'  && secrets.DATABRICKS_SPN_TOKEN_UAT
+             || secrets.DATABRICKS_SPN_TOKEN_DEV }}
           DATABRICKS_HOST: >-
             ${{ env.TARGET == 'prod' && vars.DATABRICKS_HOST_PROD
              || env.TARGET == 'uat'  && vars.DATABRICKS_HOST_UAT
@@ -467,10 +465,14 @@ jobs:
       - name: Create and run hotfix job (if generated)
         if: hashFiles('PFL/generated/hotfix_job.json') != ''
         env:
-          DATABRICKS_TOKEN: >-
-            ${{ env.TARGET == 'prod' && secrets.DATABRICKS_TOKEN_PROD
-             || env.TARGET == 'uat'  && secrets.DATABRICKS_TOKEN_UAT
-             || secrets.DATABRICKS_TOKEN_DEV }}
+          DATABRICKS_CLIENT_ID: >-
+            ${{ env.TARGET == 'prod' && secrets.DATABRICKS_CI_TOKEN_PROD
+             || env.TARGET == 'uat'  && secrets.DATABRICKS_CI_TOKEN_UAT
+             || secrets.DATABRICKS_CI_TOKEN_DEV }}
+          DATABRICKS_CLIENT_SECRET: >-
+            ${{ env.TARGET == 'prod' && secrets.DATABRICKS_SPN_TOKEN_PROD
+             || env.TARGET == 'uat'  && secrets.DATABRICKS_SPN_TOKEN_UAT
+             || secrets.DATABRICKS_SPN_TOKEN_DEV }}
           DATABRICKS_HOST: >-
             ${{ env.TARGET == 'prod' && vars.DATABRICKS_HOST_PROD
              || env.TARGET == 'uat'  && vars.DATABRICKS_HOST_UAT
