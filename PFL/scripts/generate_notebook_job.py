@@ -18,7 +18,7 @@ def discover_changed_notebooks(before_sha, after_sha):
     return [f for f in all_touched if f.endswith(".py")]
 
 
-def build_tasks(notebooks, environment):
+def build_tasks(notebooks):
     tasks = []
     seen_keys = {}
     for notebook in notebooks:
@@ -31,7 +31,7 @@ def build_tasks(notebooks, environment):
         seen_keys[task_key] = notebook
         tasks.append({
             "task_key": task_key,
-            "notebook_path": f"{job_common.WORKSPACE_ROOT[environment]}/notebooks/{notebook}",
+            "notebook_path": f"PFL/notebooks/{notebook}",
         })
     return tasks
 
@@ -49,9 +49,9 @@ def main():
         print("No changed PFL/notebooks/*.py files in this push - no notebook job to generate.")
         return
 
-    tasks = build_tasks(notebooks, environment)
+    tasks = build_tasks(notebooks)
     job_name = job_common.build_job_name("pfl-notebooks")
-    spec = job_common.build_job_spec(job_name, tasks, environment, "generate_notebook_job.py")
+    spec = job_common.build_job_spec(job_name, tasks, environment, "generate_notebook_job.py", after_sha)
 
     job_common.write_job_json(OUTPUT_JSON, spec)
     job_common.write_manifest(OUTPUT_MANIFEST, notebooks)

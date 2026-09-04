@@ -28,7 +28,7 @@ def verify_notebook_exists(after_sha, notebook_filename):
     return result.returncode == 0
 
 
-def build_tasks(filenames, after_sha, environment):
+def build_tasks(filenames, after_sha):
     tasks = []
     seen_keys = {}
     referenced_task_keys = {}
@@ -58,13 +58,13 @@ def build_tasks(filenames, after_sha, environment):
                 referenced_task_keys[notebook] = notebook_key
                 tasks.append({
                     "task_key": notebook_key,
-                    "notebook_path": f"{job_common.WORKSPACE_ROOT[environment]}/notebooks/{notebook}",
+                    "notebook_path": f"PFL/notebooks/{notebook}",
                 })
             depends_on.append(referenced_task_keys[notebook])
 
         tasks.append({
             "task_key": task_key,
-            "notebook_path": f"{job_common.WORKSPACE_ROOT[environment]}/PFL_EXECUTE/{filename}",
+            "notebook_path": f"PFL_EXECUTE/{filename}",
             "depends_on": depends_on,
         })
 
@@ -83,9 +83,9 @@ def main():
         job_common.clear_stale(OUTPUT_MANIFEST)
         return
 
-    tasks = build_tasks(filenames, after_sha, environment)
+    tasks = build_tasks(filenames, after_sha)
     job_name = job_common.build_job_name("pfl-hotfix")
-    spec = job_common.build_job_spec(job_name, tasks, environment, "generate_hotfix_resource.py")
+    spec = job_common.build_job_spec(job_name, tasks, environment, "generate_hotfix_resource.py", after_sha)
 
     job_common.write_job_json(OUTPUT_JSON, spec)
     job_common.write_manifest(OUTPUT_MANIFEST, filenames)
